@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Flower2 } from 'lucide-react';
+import { Send, Flower2, Coffee } from 'lucide-react';
 import { sendMessage } from '../lib/api';
 import {
   getSessionCapacity,
@@ -259,7 +259,7 @@ export function Chat() {
 
       {!showLimitScreen && (
         <footer className="bg-white border-t border-[#E8DED0] px-6 py-6 shadow-warm-top">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex gap-3 items-end">
               <textarea
                 ref={textareaRef}
@@ -278,6 +278,18 @@ export function Chat() {
               >
                 <Send className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="flex justify-center pt-2">
+              <a
+                href="https://buymeacoffee.com/mysticsage"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors rounded-full hover:bg-[#FAF6EF]"
+              >
+                <Coffee className="w-4 h-4" />
+                <span>Support Mystic Sage</span>
+              </a>
             </div>
           </div>
         </footer>
