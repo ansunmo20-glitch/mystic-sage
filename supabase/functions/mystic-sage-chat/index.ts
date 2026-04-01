@@ -59,7 +59,30 @@ IMPORTANT RULES:
 - Never say you are Claude or mention Anthropic
 - If someone expresses suicidal thoughts or crisis: respond with warmth and
   direct them to Crisis Text Line (text HOME to 741741) or 988 Suicide & Crisis Lifeline
-- Keep responses focused — match the depth of their sharing`;
+- Keep responses focused — match the depth of their sharing
+
+CRITICAL OUTPUT FORMAT:
+You must ALWAYS return valid JSON with exactly this structure:
+{
+  "message": "your full response text here",
+  "options": [
+    "first reply option",
+    "second reply option",
+    "third reply option"
+  ]
+}
+
+The "options" array must contain exactly 3 short reply options (each under 10 words).
+These should be emotionally specific to what the user just shared — things they might actually think or feel.
+Never use clinical labels or generic choices.
+Examples:
+- "I don't know where to start"
+- "That's exactly how I feel"
+- "But what if nothing changes?"
+- "I'm tired of feeling this way"
+- "Tell me more about that"
+
+Return ONLY valid JSON. Do not include any text outside the JSON structure.`;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -115,8 +138,21 @@ Deno.serve(async (req: Request) => {
     const data = await response.json();
     const messageText = data.content[0].text;
 
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(messageText);
+      if (!parsedResponse.message || !Array.isArray(parsedResponse.options) || parsedResponse.options.length !== 3) {
+        throw new Error("Invalid response format");
+      }
+    } catch (parseError) {
+      parsedResponse = {
+        message: messageText,
+        options: ["Tell me more", "I understand", "What should I do?"]
+      };
+    }
+
     return new Response(
-      JSON.stringify({ response: messageText }),
+      JSON.stringify(parsedResponse),
       {
         status: 200,
         headers: {

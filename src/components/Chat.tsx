@@ -15,6 +15,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  options?: string[];
 }
 
 const QUICK_REPLIES = [
@@ -30,6 +31,7 @@ export function Chat() {
   const [loading, setLoading] = useState(false);
   const [capacity, setCapacity] = useState(getSessionCapacity());
   const [hasStarted, setHasStarted] = useState(false);
+  const [currentOptions, setCurrentOptions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -68,6 +70,7 @@ export function Chat() {
 
     setInput('');
     setLoading(true);
+    setCurrentOptions([]);
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -91,13 +94,15 @@ export function Chat() {
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: response,
+        content: response.message,
         timestamp: new Date().toISOString(),
+        options: response.options,
       };
 
       const updatedMessages = [...newMessages, assistantMessage];
       setMessages(updatedMessages);
       saveMessages(updatedMessages);
+      setCurrentOptions(response.options || []);
     } catch (error) {
       console.error('Error:', error);
       alert('Failed to send message. Please try again.');
@@ -212,29 +217,50 @@ export function Chat() {
             </div>
           )}
 
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              {message.role === 'assistant' && (
-                <div className="flex-shrink-0 mr-3 mt-1">
-                  <div className="w-8 h-8 rounded-full bg-white border border-[#E8DED0] flex items-center justify-center">
-                    <Flower2 className="w-4 h-4 text-[#C4A96E]" strokeWidth={1.5} />
+          {messages.map((message, index) => {
+            const isLastMessage = index === messages.length - 1;
+            const showOptions = message.role === 'assistant' && isLastMessage && currentOptions.length > 0;
+
+            return (
+              <div key={message.id}>
+                <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {message.role === 'assistant' && (
+                    <div className="flex-shrink-0 mr-3 mt-1">
+                      <div className="w-8 h-8 rounded-full bg-white border border-[#E8DED0] flex items-center justify-center">
+                        <Flower2 className="w-4 h-4 text-[#C4A96E]" strokeWidth={1.5} />
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-2xl rounded-2xl px-6 py-4 ${
+                      message.role === 'user'
+                        ? 'bg-[#F5EFE7] text-[#2C2C2C]'
+                        : 'bg-white border border-[#E8DED0] text-[#2C2C2C] shadow-sm'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                   </div>
                 </div>
-              )}
-              <div
-                className={`max-w-2xl rounded-2xl px-6 py-4 ${
-                  message.role === 'user'
-                    ? 'bg-[#F5EFE7] text-[#2C2C2C]'
-                    : 'bg-white border border-[#E8DED0] text-[#2C2C2C] shadow-sm'
-                }`}
-              >
-                <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+
+                {showOptions && (
+                  <div className="flex justify-start ml-11 mt-3">
+                    <div className="flex flex-wrap gap-2">
+                      {currentOptions.map((option, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleQuickReply(option)}
+                          disabled={loading}
+                          className="px-4 py-2 bg-[#F5F0E8] border border-[#C4A96E] text-[#2C2C2C] text-sm rounded-full hover:bg-[#E8DED0] transition-all disabled:opacity-50"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {loading && (
             <div className="flex justify-start">

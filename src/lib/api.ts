@@ -3,7 +3,12 @@ interface Message {
   content: string;
 }
 
-export async function sendMessage(messages: Message[]): Promise<string> {
+interface ApiResponse {
+  message: string;
+  options: string[];
+}
+
+export async function sendMessage(messages: Message[]): Promise<ApiResponse> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -28,5 +33,5 @@ export async function sendMessage(messages: Message[]): Promise<string> {
   }
 
   const data = await response.json();
-  return data.response;
+  return data;
 }
