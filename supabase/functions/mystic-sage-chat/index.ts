@@ -136,15 +136,28 @@ Deno.serve(async (req: Request) => {
     }
 
     const data = await response.json();
-    const messageText = data.content[0].text;
+    let messageText = data.content[0].text;
 
     let parsedResponse;
     try {
-      parsedResponse = JSON.parse(messageText);
+      let jsonText = messageText.trim();
+
+      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1].trim();
+      } else {
+        const codeMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeMatch) {
+          jsonText = codeMatch[1].trim();
+        }
+      }
+
+      parsedResponse = JSON.parse(jsonText);
       if (!parsedResponse.message || !Array.isArray(parsedResponse.options) || parsedResponse.options.length !== 3) {
         throw new Error("Invalid response format");
       }
     } catch (parseError) {
+      console.error("Failed to parse JSON response:", parseError, "Original text:", messageText);
       parsedResponse = {
         message: messageText,
         options: ["Tell me more", "I understand", "What should I do?"]
