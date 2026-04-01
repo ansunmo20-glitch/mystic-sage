@@ -88,33 +88,10 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("No authorization header");
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-
-    if (userError || !user) {
-      throw new Error("Invalid token");
-    }
-
     const { conversationId, message, conversationHistory }: RequestBody = await req.json();
-
-    const { data: conversation, error: convError } = await supabase
-      .from("conversations")
-      .select("*")
-      .eq("id", conversationId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (convError || !conversation) {
-      throw new Error("Conversation not found");
-    }
 
     await supabase.from("messages").insert({
       conversation_id: conversationId,
@@ -192,7 +169,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {
         status: 400,
         headers: {

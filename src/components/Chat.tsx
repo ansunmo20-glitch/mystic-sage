@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Message, Conversation } from '../lib/supabase';
-import { Send, Sparkles, LogOut, MessageSquare } from 'lucide-react';
+import { Send, Sparkles, MessageSquare } from 'lucide-react';
 
 const SESSIONS_PER_WEEK = 7;
 
@@ -19,7 +18,6 @@ interface AssistantMessage extends Message {
 }
 
 export function Chat() {
-  const { user, signOut } = useAuth();
   const [messages, setMessages] = useState<(Message | AssistantMessage)[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,52 +27,16 @@ export function Chat() {
 
   useEffect(() => {
     initializeConversation();
-    checkWeeklyUsage();
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const checkWeeklyUsage = async () => {
-    if (!user) return;
-
-    const weekStart = getWeekStart(new Date());
-    const { data } = await supabase
-      .from('weekly_usage')
-      .select('sessions_used')
-      .eq('user_id', user.id)
-      .eq('week_start', weekStart)
-      .maybeSingle();
-
-    setSessionsUsed(data?.sessions_used || 0);
-  };
-
   const initializeConversation = async () => {
-    if (!user) return;
-
-    const { data: conversations } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (conversations && conversations.length > 0) {
-      setCurrentConversation(conversations[0]);
-      loadMessages(conversations[0].id);
-    } else {
-      await createNewConversation();
-    }
-  };
-
-  const createNewConversation = async () => {
-    if (!user) return;
-
     const { data, error } = await supabase
       .from('conversations')
       .insert({
-        user_id: user.id,
         title: 'New Conversation',
       })
       .select()
@@ -83,6 +45,22 @@ export function Chat() {
     if (!error && data) {
       setCurrentConversation(data);
       setMessages([]);
+    }
+  };
+
+  const createNewConversation = async () => {
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        title: 'New Conversation',
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setCurrentConversation(data);
+      setMessages([]);
+      setSessionsUsed(0);
     }
   };
 
@@ -95,36 +73,6 @@ export function Chat() {
 
     if (data) {
       setMessages(data);
-    }
-  };
-
-  const updateWeeklyUsage = async () => {
-    if (!user) return;
-
-    const weekStart = getWeekStart(new Date());
-    const { data: existing } = await supabase
-      .from('weekly_usage')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('week_start', weekStart)
-      .maybeSingle();
-
-    if (existing) {
-      await supabase
-        .from('weekly_usage')
-        .update({
-          sessions_used: existing.sessions_used + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
-      setSessionsUsed(existing.sessions_used + 1);
-    } else {
-      await supabase.from('weekly_usage').insert({
-        user_id: user.id,
-        week_start: weekStart,
-        sessions_used: 1,
-      });
-      setSessionsUsed(1);
     }
   };
 
@@ -142,7 +90,7 @@ export function Chat() {
     if (!input.trim() || !currentConversation || loading) return;
 
     if (sessionsUsed >= SESSIONS_PER_WEEK) {
-      alert(`You've used all ${SESSIONS_PER_WEEK} sessions this week. They reset on Monday.`);
+      alert(`You've used all ${SESSIONS_PER_WEEK} sessions this week. Start a new conversation!`);
       return;
     }
 
@@ -151,8 +99,6 @@ export function Chat() {
     setLoading(true);
 
     try {
-      await updateWeeklyUsage();
-
       const newMessages = [
         ...messages,
         {
@@ -164,15 +110,14 @@ export function Chat() {
         },
       ];
       setMessages(newMessages);
+      setSessionsUsed(sessionsUsed + 1);
 
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mystic-sage-chat`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             conversationId: currentConversation.id,
@@ -202,6 +147,7 @@ export function Chat() {
     } catch (error) {
       console.error('Error:', error);
       alert('Failed to send message. Please try again.');
+      setSessionsUsed(sessionsUsed > 0 ? sessionsUsed - 1 : 0);
     } finally {
       setLoading(false);
     }
@@ -242,13 +188,6 @@ export function Chat() {
             >
               <MessageSquare className="w-5 h-5 text-amber-300" />
             </button>
-            <button
-              onClick={signOut}
-              className="p-2 hover:bg-amber-900/20 rounded-lg transition-colors"
-              title="Sign out"
-            >
-              <LogOut className="w-5 h-5 text-amber-300" />
-            </button>
           </div>
         </div>
       </header>
@@ -268,7 +207,7 @@ export function Chat() {
               </p>
             </div>
           ) : (
-            messages.map((message, idx) => (
+            messages.map((message) => (
               <div key={message.id}>
                 <div
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
