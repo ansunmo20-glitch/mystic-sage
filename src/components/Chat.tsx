@@ -4,6 +4,8 @@ import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
 import { saveMessages, loadMessages, clearMessages } from '../lib/storage';
 import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
+import { Modal } from './Modal';
+import { resetSessionForUser } from '../lib/devUtils';
 
 interface Message {
   id: string;
@@ -25,6 +27,9 @@ export function Chat() {
   const [hasStarted, setHasStarted] = useState(false);
   const [tokensUsed, setTokensUsed] = useState(0);
   const [maxTokens, setMaxTokens] = useState(100000);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -72,7 +77,9 @@ export function Chat() {
 
     if (!hasStarted) {
       if (!canUseSession) {
-        alert("You've used your session this week. Come back next Monday.");
+        setModalTitle('Session Limit Reached');
+        setModalMessage("You've used your session this week. Come back next Monday for a fresh start!");
+        setModalOpen(true);
         return;
       }
 
@@ -84,14 +91,18 @@ export function Chat() {
         setCanUseSession(result.canUseSession);
 
         if (!result.canUseSession) {
-          alert(result.message || 'Session limit reached');
+          setModalTitle('Session Limit Reached');
+          setModalMessage(result.message || 'Session limit reached');
+          setModalOpen(true);
           return;
         }
 
         setHasStarted(true);
       } catch (error) {
         console.error('Error checking session:', error);
-        alert('Failed to start session. Please try again.');
+        setModalTitle('Error');
+        setModalMessage('Failed to start session. Please try again.');
+        setModalOpen(true);
         return;
       }
     }
@@ -164,6 +175,26 @@ export function Chat() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleDevReset = async () => {
+    if (!user) return;
+
+    try {
+      await resetSessionForUser(user.id);
+      setSessionsUsed(0);
+      setCanUseSession(true);
+      setTokensUsed(0);
+      setModalTitle('Dev Reset Complete');
+      setModalMessage('Session and token counts have been reset for testing.');
+      setModalOpen(true);
+      await loadSessionUsage();
+    } catch (error) {
+      console.error('Error resetting session:', error);
+      setModalTitle('Error');
+      setModalMessage('Failed to reset session.');
+      setModalOpen(true);
     }
   };
 
@@ -330,10 +361,24 @@ export function Chat() {
                 <Mail className="w-4 h-4" />
                 <span>Contact</span>
               </a>
+              <button
+                onClick={handleDevReset}
+                className="px-2 py-1 text-xs text-[#9B9B9B] hover:text-[#C4A96E] transition-colors opacity-30 hover:opacity-100"
+                title="Dev: Reset session count"
+              >
+                dev
+              </button>
             </div>
           </div>
         </footer>
       )}
+
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        message={modalMessage}
+      />
     </div>
   );
 }
