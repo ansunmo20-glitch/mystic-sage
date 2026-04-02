@@ -294,6 +294,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // OPTIMIZATION 3: Model mixing - use Haiku for early turns, Sonnet for later
+    const userTurnCount = messages.filter(m => m.role === 'user').length;
+    const model = userTurnCount <= 2
+      ? "claude-haiku-4-5-20251001"
+      : "claude-sonnet-4-20250514";
+
+    // OPTIMIZATION 2: Conversation history compression - keep last 4 turns, summarize earlier
+    let processedMessages = messages;
+    if (messages.length > 8) {
+      const recentMessages = messages.slice(-8);
+      const olderMessages = messages.slice(0, -8);
+
+      const userMessages = olderMessages.filter(m => m.role === 'user').map(m => m.content);
+      const assistantMessages = olderMessages.filter(m => m.role === 'assistant').map(m => m.content);
+
+      const summary = `[Earlier conversation: User discussed ${userMessages.length > 0 ? userMessages.slice(0, 2).join(', ').substring(0, 100) : 'their situation'}. Assistant provided ${assistantMessages.length} responses with reflective questions and emotional support.]`;
+
+      processedMessages = [
+        { role: 'user' as const, content: summary },
+        { role: 'assistant' as const, content: 'I understand. Please continue.' },
+        ...recentMessages
+      ];
+    }
+
+    // OPTIMIZATION 1: Prompt caching with cache_control
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -302,10 +327,16 @@ Deno.serve(async (req: Request) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: model,
         max_tokens: 2048,
-        system: SYSTEM_PROMPT,
-        messages: messages,
+        system: [
+          {
+            type: "text",
+            text: SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" }
+          }
+        ],
+        messages: processedMessages,
       }),
     });
 
