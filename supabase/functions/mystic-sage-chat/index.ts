@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.101.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,7 @@ interface Message {
 
 interface RequestBody {
   messages: Message[];
+  userId: string;
 }
 
 const SYSTEM_PROMPT = `You are Mystic Sage — a calm, grounded presence rooted in Buddhist and Taoist wisdom.
@@ -274,16 +276,37 @@ Deno.serve(async (req: Request) => {
 
   try {
     const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!anthropicApiKey) {
       throw new Error("ANTHROPIC_API_KEY not configured");
     }
 
-    const { messages }: RequestBody = await req.json();
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { messages, userId }: RequestBody = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(
         JSON.stringify({ error: "Invalid request: messages array required" }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request: userId required" }),
         {
           status: 400,
           headers: {
@@ -343,6 +366,39 @@ Deno.serve(async (req: Request) => {
     const data = await response.json();
     let messageText = data.content[0].text;
 
+    // Extract token usage from the response
+    const inputTokens = data.usage?.input_tokens || 0;
+    const outputTokens = data.usage?.output_tokens || 0;
+    const totalTokens = inputTokens + outputTokens;
+
+    // Update token usage in the database
+    try {
+      const { data: sessionData, error: fetchError } = await supabase
+        .from('user_sessions')
+        .select('tokens_used, tokens_input, tokens_output')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Error fetching session data:', fetchError);
+      } else if (sessionData) {
+        const { error: updateError } = await supabase
+          .from('user_sessions')
+          .update({
+            tokens_used: sessionData.tokens_used + totalTokens,
+            tokens_input: sessionData.tokens_input + inputTokens,
+            tokens_output: sessionData.tokens_output + outputTokens,
+          })
+          .eq('user_id', userId);
+
+        if (updateError) {
+          console.error('Error updating token usage:', updateError);
+        }
+      }
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+    }
+
     let parsedResponse;
     try {
       let jsonText = messageText.trim();
@@ -368,6 +424,13 @@ Deno.serve(async (req: Request) => {
         options: ["Tell me more", "I understand", "What should I do?"]
       };
     }
+
+    // Add token usage to the response
+    parsedResponse.tokenUsage = {
+      input: inputTokens,
+      output: outputTokens,
+      total: totalTokens,
+    };
 
     return new Response(
       JSON.stringify(parsedResponse),

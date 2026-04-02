@@ -6,9 +6,14 @@ interface Message {
 interface ApiResponse {
   message: string;
   options: string[];
+  tokenUsage?: {
+    input: number;
+    output: number;
+    total: number;
+  };
 }
 
-export async function sendMessage(messages: Message[]): Promise<ApiResponse> {
+export async function sendMessage(messages: Message[], userId: string): Promise<ApiResponse> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -24,7 +29,7 @@ export async function sendMessage(messages: Message[]): Promise<ApiResponse> {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${supabaseAnonKey}`,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, userId }),
   });
 
   if (!response.ok) {

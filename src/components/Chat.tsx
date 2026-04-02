@@ -23,6 +23,8 @@ export function Chat() {
   const [maxSessions, setMaxSessions] = useState(1);
   const [canUseSession, setCanUseSession] = useState(true);
   const [hasStarted, setHasStarted] = useState(false);
+  const [tokensUsed, setTokensUsed] = useState(0);
+  const [maxTokens, setMaxTokens] = useState(100000);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,6 +48,8 @@ export function Chat() {
       setSessionsUsed(usage.sessionsUsed);
       setMaxSessions(usage.maxSessions);
       setCanUseSession(usage.sessionsUsed < usage.maxSessions);
+      setTokensUsed(usage.tokensUsed);
+      setMaxTokens(usage.maxTokens);
     } catch (error) {
       console.error('Error loading session usage:', error);
     }
@@ -67,7 +71,7 @@ export function Chat() {
     if (!messageText || loading || !user) return;
 
     if (!canUseSession) {
-      alert('You have reached your weekly session limit. Sessions reset every Monday.');
+      alert("You've used your session this week. Come back next Monday.");
       return;
     }
 
@@ -112,7 +116,7 @@ export function Chat() {
         content: msg.content,
       }));
 
-      const response = await sendMessage(apiMessages);
+      const response = await sendMessage(apiMessages, user.id);
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
@@ -124,6 +128,11 @@ export function Chat() {
       const updatedMessages = [...newMessages, assistantMessage];
       setMessages(updatedMessages);
       saveMessages(updatedMessages);
+
+      // Update token usage if provided
+      if (response.tokenUsage) {
+        setTokensUsed((prev) => prev + response.tokenUsage.total);
+      }
     } catch (error) {
       console.error('Error:', error);
       alert('Failed to send message. Please try again.');
@@ -172,8 +181,8 @@ export function Chat() {
     }
   };
 
-  const capacityPercentage = maxSessions > 0 ? ((maxSessions - sessionsUsed) / maxSessions) * 100 : 0;
-  const capacityColor = capacityPercentage > 30 ? '#C4A96E' : '#D4A574';
+  const tokenPercentage = maxTokens > 0 ? ((maxTokens - tokensUsed) / maxTokens) * 100 : 0;
+  const capacityColor = tokenPercentage > 30 ? '#C4A96E' : tokenPercentage > 10 ? '#D4A574' : '#C97C5D';
   const showLimitScreen = !canUseSession && hasStarted;
 
   return (
@@ -191,13 +200,13 @@ export function Chat() {
                 <div
                   className="h-full transition-all duration-300"
                   style={{
-                    width: `${capacityPercentage}%`,
+                    width: `${tokenPercentage}%`,
                     backgroundColor: capacityColor,
                   }}
                 />
               </div>
               <p className="text-xs text-[#9B9B9B] mt-1">
-                {sessionsUsed}/{maxSessions} sessions used
+                {Math.round((tokensUsed / 1000) * 10) / 10}k / {maxTokens / 1000}k tokens
               </p>
             </div>
 
@@ -244,10 +253,10 @@ export function Chat() {
               </div>
               <div className="space-y-4 max-w-lg mx-auto">
                 <h2 className="font-serif text-2xl text-[#2C2C2C]">
-                  Your weekly sessions have ended
+                  You've used your session this week
                 </h2>
                 <p className="text-[#6B6B6B] text-lg leading-relaxed italic">
-                  Return on Monday — the practice of patience is itself a teaching.
+                  Come back next Monday — the practice of patience is itself a teaching.
                 </p>
               </div>
             </div>

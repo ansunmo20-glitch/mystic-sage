@@ -9,6 +9,10 @@ interface UserSession {
   last_session_at: string;
   created_at: string;
   updated_at: string;
+  tokens_used: number;
+  max_tokens: number;
+  tokens_input: number;
+  tokens_output: number;
 }
 
 function getWeekStartDate(): string {
@@ -122,13 +126,16 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
   sessionsUsed: number;
   maxSessions: number;
   weekStart: string;
+  tokensUsed: number;
+  maxTokens: number;
 }> {
   const weekStart = getWeekStartDate();
   const maxSessions = 1;
+  const maxTokens = 100000;
 
   const { data: session, error } = await supabase
     .from('user_sessions')
-    .select('sessions_used, week_start_date')
+    .select('sessions_used, week_start_date, tokens_used, max_tokens')
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -142,6 +149,8 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
       sessionsUsed: 0,
       maxSessions,
       weekStart,
+      tokensUsed: 0,
+      maxTokens,
     };
   }
 
@@ -149,5 +158,7 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
     sessionsUsed: session.sessions_used,
     maxSessions,
     weekStart,
+    tokensUsed: session.tokens_used,
+    maxTokens: session.max_tokens,
   };
 }
