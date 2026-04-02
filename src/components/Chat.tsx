@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Flower2, Coffee, Mail, LogOut } from 'lucide-react';
+import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
 import { saveMessages, loadMessages, clearMessages } from '../lib/storage';
-import { useAuth } from '../contexts/AuthContext';
 import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
 
 interface Message {
@@ -14,7 +14,8 @@ interface Message {
 
 
 export function Chat() {
-  const { user, signOut } = useAuth();
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,7 @@ export function Chat() {
   }, [user]);
 
   const loadSessionUsage = async () => {
-    if (!user) return;
+    if (!user || !isLoaded) return;
 
     try {
       const usage = await getCurrentSessionUsage(user.id);
@@ -72,7 +73,8 @@ export function Chat() {
 
     if (!hasStarted) {
       try {
-        const result = await checkAndUpdateSession(user.id, user.email || '');
+        const email = user.emailAddresses?.[0]?.emailAddress || user.id;
+        const result = await checkAndUpdateSession(user.id, email);
         setSessionsUsed(result.sessionsUsed);
         setMaxSessions(result.maxSessions);
         setCanUseSession(result.canUseSession);
@@ -139,7 +141,8 @@ export function Chat() {
       setHasStarted(false);
 
       try {
-        const result = await checkAndUpdateSession(user.id, user.email || '');
+        const email = user.emailAddresses?.[0]?.emailAddress || user.id;
+        const result = await checkAndUpdateSession(user.id, email);
         setSessionsUsed(result.sessionsUsed);
         setMaxSessions(result.maxSessions);
         setCanUseSession(result.canUseSession);

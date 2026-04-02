@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
 import { Welcome } from './components/Welcome';
 import { Chat } from './components/Chat';
 import Login from './components/Login';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { hasSeenWelcome, markWelcomeSeen } from './lib/storage';
 
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!clerkPubKey) {
+  throw new Error('Missing Clerk Publishable Key');
+}
+
 function AppContent() {
-  const { user, loading } = useAuth();
   const [showWelcome, setShowWelcome] = useState(true);
   const [isReady, setIsReady] = useState(false);
 
@@ -22,22 +27,27 @@ function AppContent() {
     setShowWelcome(false);
   };
 
-  if (loading || !isReady) {
+  if (!isReady) {
     return null;
   }
 
-  if (!user) {
-    return <Login />;
-  }
-
-  return showWelcome ? <Welcome onBegin={handleBegin} /> : <Chat />;
+  return (
+    <>
+      <SignedOut>
+        <Login />
+      </SignedOut>
+      <SignedIn>
+        {showWelcome ? <Welcome onBegin={handleBegin} /> : <Chat />}
+      </SignedIn>
+    </>
+  );
 }
 
 function App() {
   return (
-    <AuthProvider>
+    <ClerkProvider publishableKey={clerkPubKey}>
       <AppContent />
-    </AuthProvider>
+    </ClerkProvider>
   );
 }
 
