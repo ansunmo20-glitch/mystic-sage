@@ -54,6 +54,9 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
         sessions_used: 1,
         week_start_date: weekStart,
         last_session_at: new Date().toISOString(),
+        tokens_used: 0,
+        tokens_input: 0,
+        tokens_output: 0,
       });
 
     if (insertError) {
@@ -76,6 +79,9 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
         sessions_used: 1,
         week_start_date: weekStart,
         last_session_at: new Date().toISOString(),
+        tokens_used: 0,
+        tokens_input: 0,
+        tokens_output: 0,
       })
       .eq('user_id', userId);
 
@@ -101,24 +107,11 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
     };
   }
 
-  const { error: updateError } = await supabase
-    .from('user_sessions')
-    .update({
-      sessions_used: existingSession.sessions_used + 1,
-      last_session_at: new Date().toISOString(),
-    })
-    .eq('user_id', userId);
-
-  if (updateError) {
-    console.error('Error updating session:', updateError);
-    throw updateError;
-  }
-
   return {
     canUseSession: true,
-    sessionsUsed: existingSession.sessions_used + 1,
+    sessionsUsed: existingSession.sessions_used,
     maxSessions,
-    message: 'Session continued',
+    message: 'Session active',
   };
 }
 

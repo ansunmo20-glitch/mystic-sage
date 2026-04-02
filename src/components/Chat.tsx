@@ -70,12 +70,12 @@ export function Chat() {
     const messageText = input.trim();
     if (!messageText || loading || !user) return;
 
-    if (!canUseSession) {
-      alert("You've used your session this week. Come back next Monday.");
-      return;
-    }
-
     if (!hasStarted) {
+      if (!canUseSession) {
+        alert("You've used your session this week. Come back next Monday.");
+        return;
+      }
+
       try {
         const email = user.emailAddresses?.[0]?.emailAddress || user.id;
         const result = await checkAndUpdateSession(user.id, email);
@@ -148,20 +148,6 @@ export function Chat() {
       clearMessages();
       setMessages([]);
       setHasStarted(false);
-
-      try {
-        const email = user.emailAddresses?.[0]?.emailAddress || user.id;
-        const result = await checkAndUpdateSession(user.id, email);
-        setSessionsUsed(result.sessionsUsed);
-        setMaxSessions(result.maxSessions);
-        setCanUseSession(result.canUseSession);
-
-        if (!result.canUseSession) {
-          alert(result.message || 'Session limit reached');
-        }
-      } catch (error) {
-        console.error('Error starting new session:', error);
-      }
     }
   };
 
