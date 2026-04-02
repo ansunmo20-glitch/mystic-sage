@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Flower2, Coffee } from 'lucide-react';
+import { Send, Flower2, Coffee, Mail } from 'lucide-react';
 import { sendMessage } from '../lib/api';
 import {
   getSessionCapacity,
@@ -251,7 +251,7 @@ export function Chat() {
               </button>
             </div>
 
-            <div className="flex justify-center pt-2">
+            <div className="flex justify-center items-center gap-4 pt-2">
               <a
                 href="https://buymeacoffee.com/mysticsage"
                 target="_blank"
@@ -260,6 +260,13 @@ export function Chat() {
               >
                 <Coffee className="w-4 h-4" />
                 <span>Support Mystic Sage</span>
+              </a>
+              <a
+                href="mailto:mysticsage.hello@gmail.com"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors rounded-full hover:bg-[#FAF6EF]"
+              >
+                <Mail className="w-4 h-4" />
+                <span>Contact</span>
               </a>
             </div>
           </div>
