@@ -18,12 +18,6 @@ interface Message {
   options?: string[];
 }
 
-const QUICK_REPLIES = [
-  "I'm feeling overwhelmed",
-  "I have a relationship problem",
-  "I'm struggling with work",
-  "I just need to talk",
-];
 
 export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -179,24 +173,8 @@ export function Chat() {
               </div>
               <div className="space-y-4">
                 <h2 className="font-serif text-2xl text-[#2C2C2C]">
-                  What's weighing on your mind?
+                  What brought you here today?
                 </h2>
-                <p className="text-[#6B6B6B] max-w-md mx-auto leading-relaxed">
-                  Share whatever feels heavy. I'm here to listen without judgment.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-3 pt-4">
-                {QUICK_REPLIES.map((reply) => (
-                  <button
-                    key={reply}
-                    onClick={() => handleQuickReply(reply)}
-                    disabled={loading}
-                    className="px-5 py-3 bg-white border border-[#E8DED0] text-[#6B6B6B] rounded-full hover:border-[#C4A96E] hover:text-[#C4A96E] transition-all disabled:opacity-50 shadow-sm"
-                  >
-                    {reply}
-                  </button>
-                ))}
               </div>
             </div>
           )}
@@ -292,7 +270,7 @@ export function Chat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="What's weighing on your mind today?"
+                placeholder="What brought you here today?"
                 disabled={loading}
                 rows={1}
                 className="flex-1 px-6 py-4 bg-[#FAF6EF] border border-[#E8DED0] rounded-2xl text-[#2C2C2C] placeholder-[#9B9B9B] focus:outline-none focus:border-[#C4A96E] transition-all disabled:opacity-50 resize-none min-h-[56px] max-h-[200px]"
