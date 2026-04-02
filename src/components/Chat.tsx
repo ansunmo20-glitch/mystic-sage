@@ -1,14 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Flower2, Coffee, Mail } from 'lucide-react';
+import { Send, Flower2, Coffee, Mail, LogOut } from 'lucide-react';
 import { sendMessage } from '../lib/api';
-import {
-  getSessionCapacity,
-  hasSessionsRemaining,
-  useSession,
-  saveMessages,
-  loadMessages,
-  clearMessages,
-} from '../lib/storage';
+import { saveMessages, loadMessages, clearMessages } from '../lib/storage';
+import { useAuth } from '../contexts/AuthContext';
+import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
 
 interface Message {
   id: string;
@@ -19,10 +14,13 @@ interface Message {
 
 
 export function Chat() {
+  const { user, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [capacity, setCapacity] = useState(getSessionCapacity());
+  const [sessionsUsed, setSessionsUsed] = useState(0);
+  const [maxSessions, setMaxSessions] = useState(1);
+  const [canUseSession, setCanUseSession] = useState(true);
   const [hasStarted, setHasStarted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -33,7 +31,24 @@ export function Chat() {
       setMessages(saved);
       setHasStarted(true);
     }
-  }, []);
+
+    if (user) {
+      loadSessionUsage();
+    }
+  }, [user]);
+
+  const loadSessionUsage = async () => {
+    if (!user) return;
+
+    try {
+      const usage = await getCurrentSessionUsage(user.id);
+      setSessionsUsed(usage.sessionsUsed);
+      setMaxSessions(usage.maxSessions);
+      setCanUseSession(usage.sessionsUsed < usage.maxSessions);
+    } catch (error) {
+      console.error('Error loading session usage:', error);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -48,16 +63,31 @@ export function Chat() {
 
   const handleSend = async () => {
     const messageText = input.trim();
-    if (!messageText || loading) return;
+    if (!messageText || loading || !user) return;
 
-    if (!hasSessionsRemaining()) {
+    if (!canUseSession) {
+      alert('You have reached your weekly session limit. Sessions reset every Monday.');
       return;
     }
 
     if (!hasStarted) {
-      useSession();
-      setCapacity(getSessionCapacity());
-      setHasStarted(true);
+      try {
+        const result = await checkAndUpdateSession(user.id, user.email || '');
+        setSessionsUsed(result.sessionsUsed);
+        setMaxSessions(result.maxSessions);
+        setCanUseSession(result.canUseSession);
+
+        if (!result.canUseSession) {
+          alert(result.message || 'Session limit reached');
+          return;
+        }
+
+        setHasStarted(true);
+      } catch (error) {
+        console.error('Error checking session:', error);
+        alert('Failed to start session. Please try again.');
+        return;
+      }
     }
 
     setInput('');
@@ -100,13 +130,35 @@ export function Chat() {
     }
   };
 
-  const handleNewConversation = () => {
+  const handleNewConversation = async () => {
+    if (!user) return;
+
     if (confirm('Start a new conversation? Your current chat will be cleared.')) {
       clearMessages();
       setMessages([]);
       setHasStarted(false);
-      useSession();
-      setCapacity(getSessionCapacity());
+
+      try {
+        const result = await checkAndUpdateSession(user.id, user.email || '');
+        setSessionsUsed(result.sessionsUsed);
+        setMaxSessions(result.maxSessions);
+        setCanUseSession(result.canUseSession);
+
+        if (!result.canUseSession) {
+          alert(result.message || 'Session limit reached');
+        }
+      } catch (error) {
+        console.error('Error starting new session:', error);
+      }
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      clearMessages();
+    } catch (error) {
+      console.error('Error signing out:', error);
     }
   };
 
@@ -117,8 +169,9 @@ export function Chat() {
     }
   };
 
-  const capacityColor = capacity.percentage > 70 ? '#C4A96E' : '#D4A574';
-  const showLimitScreen = !hasSessionsRemaining() && hasStarted;
+  const capacityPercentage = maxSessions > 0 ? ((maxSessions - sessionsUsed) / maxSessions) * 100 : 0;
+  const capacityColor = capacityPercentage > 30 ? '#C4A96E' : '#D4A574';
+  const showLimitScreen = !canUseSession && hasStarted;
 
   return (
     <div className="min-h-screen bg-[#FAF6EF] flex flex-col">
@@ -135,12 +188,14 @@ export function Chat() {
                 <div
                   className="h-full transition-all duration-300"
                   style={{
-                    width: `${capacity.percentage}%`,
+                    width: `${capacityPercentage}%`,
                     backgroundColor: capacityColor,
                   }}
                 />
               </div>
-              <p className="text-xs text-[#9B9B9B] mt-1">Weekly capacity</p>
+              <p className="text-xs text-[#9B9B9B] mt-1">
+                {sessionsUsed}/{maxSessions} sessions used
+              </p>
             </div>
 
             {hasStarted && (
@@ -151,6 +206,14 @@ export function Chat() {
                 New
               </button>
             )}
+
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-2 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
