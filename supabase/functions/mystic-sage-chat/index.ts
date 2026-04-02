@@ -294,12 +294,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // OPTIMIZATION 3: Model mixing - use Haiku for early turns, Sonnet for later
-    const userTurnCount = messages.filter(m => m.role === 'user').length;
-    const model = userTurnCount <= 2
-      ? "claude-haiku-4-5-20251001"
-      : "claude-sonnet-4-20250514";
-
     // OPTIMIZATION 2: Conversation history compression - keep last 4 turns, summarize earlier
     let processedMessages = messages;
     if (messages.length > 8) {
@@ -327,7 +321,7 @@ Deno.serve(async (req: Request) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: model,
+        model: "claude-sonnet-4-20250514",
         max_tokens: 2048,
         system: [
           {
