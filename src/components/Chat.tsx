@@ -212,9 +212,10 @@ export function Chat() {
 
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors"
+              className="flex items-center gap-1.5 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors"
               title="Sign out"
             >
+              <span>Sign out</span>
               <LogOut className="w-4 h-4" />
             </button>
           </div>
