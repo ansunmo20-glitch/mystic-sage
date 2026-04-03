@@ -2,10 +2,18 @@ import { useState, useEffect, useRef } from 'react';
 import { Send, Flower2, Coffee, Mail, LogOut } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
-import { saveMessages, loadMessages, clearMessages } from '../lib/storage';
 import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
 import { Modal } from './Modal';
+import { SessionSidebar } from './SessionSidebar';
 import { resetSessionForUser } from '../lib/devUtils';
+import {
+  ChatSession,
+  getAllSessions,
+  getSession,
+  createNewSession,
+  saveSession,
+  updateSessionTitle
+} from '../lib/sessionStorage';
 
 interface Message {
   id: string;
@@ -18,6 +26,8 @@ interface Message {
 export function Chat() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
+  const [allSessions, setAllSessions] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,14 +40,24 @@ export function Chat() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    const saved = loadMessages();
-    if (saved.length > 0) {
-      setMessages(saved);
-      setHasStarted(true);
+    const sessions = getAllSessions();
+    setAllSessions(sessions);
+
+    if (sessions.length > 0) {
+      const latestSession = sessions[0];
+      setCurrentSession(latestSession);
+      setMessages(latestSession.messages);
+      setHasStarted(latestSession.messages.length > 0);
+    } else {
+      const newSession = createNewSession();
+      setCurrentSession(newSession);
+      saveSession(newSession);
+      setAllSessions([newSession]);
     }
 
     if (user) {
@@ -73,7 +93,7 @@ export function Chat() {
 
   const handleSend = async () => {
     const messageText = input.trim();
-    if (!messageText || loading || !user) return;
+    if (!messageText || loading || !user || !currentSession) return;
 
     if (!hasStarted) {
       if (!canUseSession) {
@@ -119,7 +139,19 @@ export function Chat() {
 
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
-    saveMessages(newMessages);
+
+    if (currentSession.messages.length === 0) {
+      updateSessionTitle(currentSession.id, messageText);
+    }
+
+    const updatedSession = {
+      ...currentSession,
+      messages: newMessages,
+      updatedAt: new Date().toISOString()
+    };
+    setCurrentSession(updatedSession);
+    saveSession(updatedSession);
+    setAllSessions(getAllSessions());
 
     try {
       const apiMessages = newMessages.map((msg) => ({
@@ -136,11 +168,18 @@ export function Chat() {
         timestamp: new Date().toISOString(),
       };
 
-      const updatedMessages = [...newMessages, assistantMessage];
-      setMessages(updatedMessages);
-      saveMessages(updatedMessages);
+      const finalMessages = [...newMessages, assistantMessage];
+      setMessages(finalMessages);
 
-      // Update token usage if provided
+      const finalSession = {
+        ...updatedSession,
+        messages: finalMessages,
+        updatedAt: new Date().toISOString()
+      };
+      setCurrentSession(finalSession);
+      saveSession(finalSession);
+      setAllSessions(getAllSessions());
+
       if (response.tokenUsage) {
         setTokensUsed((prev) => prev + response.tokenUsage.total);
       }
@@ -155,17 +194,28 @@ export function Chat() {
   const handleNewConversation = async () => {
     if (!user) return;
 
-    if (confirm('Start a new conversation? Your current chat will be cleared.')) {
-      clearMessages();
-      setMessages([]);
-      setHasStarted(false);
+    const newSession = createNewSession();
+    setCurrentSession(newSession);
+    saveSession(newSession);
+    setMessages([]);
+    setHasStarted(false);
+    setAllSessions(getAllSessions());
+    setSidebarOpen(false);
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    const session = getSession(sessionId);
+    if (session) {
+      setCurrentSession(session);
+      setMessages(session.messages);
+      setHasStarted(session.messages.length > 0);
+      setSidebarOpen(false);
     }
   };
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      clearMessages();
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -204,6 +254,14 @@ export function Chat() {
 
   return (
     <div className="min-h-screen bg-[#FAF6EF] flex flex-col">
+      <SessionSidebar
+        sessions={allSessions}
+        activeSessionId={currentSession?.id || null}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewConversation}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+      />
       <header className="bg-white border-b border-[#E8DED0] px-6 py-4 shadow-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
