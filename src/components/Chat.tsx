@@ -12,7 +12,8 @@ import {
   getSession,
   createNewSession,
   saveSession,
-  updateSessionTitle
+  updateSessionTitle,
+  deleteSession
 } from '../lib/sessionStorage';
 
 interface Message {
@@ -213,6 +214,29 @@ export function Chat() {
     }
   };
 
+  const handleDeleteSession = (sessionId: string) => {
+    deleteSession(sessionId);
+
+    const updatedSessions = getAllSessions();
+    setAllSessions(updatedSessions);
+
+    if (currentSession?.id === sessionId) {
+      if (updatedSessions.length > 0) {
+        const nextSession = updatedSessions[0];
+        setCurrentSession(nextSession);
+        setMessages(nextSession.messages);
+        setHasStarted(nextSession.messages.length > 0);
+      } else {
+        const newSession = createNewSession();
+        setCurrentSession(newSession);
+        saveSession(newSession);
+        setMessages([]);
+        setHasStarted(false);
+        setAllSessions([newSession]);
+      }
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -259,6 +283,7 @@ export function Chat() {
         activeSessionId={currentSession?.id || null}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewConversation}
+        onDeleteSession={handleDeleteSession}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />

@@ -1,4 +1,4 @@
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { ChatSession, formatSessionDate } from '../lib/sessionStorage';
 
 interface SessionSidebarProps {
@@ -6,6 +6,7 @@ interface SessionSidebarProps {
   activeSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
+  onDeleteSession: (sessionId: string) => void;
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -15,6 +16,7 @@ export function SessionSidebar({
   activeSessionId,
   onSelectSession,
   onNewSession,
+  onDeleteSession,
   isOpen,
   onToggle
 }: SessionSidebarProps) {
@@ -39,23 +41,37 @@ export function SessionSidebar({
 
           <div className="flex-1 overflow-y-auto p-3 space-y-1">
             {sessions.map((session) => (
-              <button
+              <div
                 key={session.id}
-                onClick={() => onSelectSession(session.id)}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-all ${
+                className={`relative group w-full rounded-lg transition-all ${
                   activeSessionId === session.id
-                    ? 'bg-[#F5EFE7] text-[#2C2C2C] border border-[#C4A96E]'
-                    : 'text-[#6B6B6B] hover:bg-[#FAF6EF]'
+                    ? 'bg-[#F5EFE7] border border-[#C4A96E]'
+                    : 'hover:bg-[#FAF6EF]'
                 }`}
               >
-                <div className="text-sm truncate">
-                  <span className="text-[#9B9B9B]">{formatSessionDate(session.createdAt)}</span>
-                  <span className="text-[#9B9B9B] mx-1.5">·</span>
-                  <span className={activeSessionId === session.id ? 'text-[#2C2C2C]' : 'text-[#6B6B6B]'}>
-                    {session.title}
-                  </span>
-                </div>
-              </button>
+                <button
+                  onClick={() => onSelectSession(session.id)}
+                  className="w-full text-left px-4 py-3 pr-10"
+                >
+                  <div className="text-sm truncate">
+                    <span className="text-[#9B9B9B]">{formatSessionDate(session.createdAt)}</span>
+                    <span className="text-[#9B9B9B] mx-1.5">·</span>
+                    <span className={activeSessionId === session.id ? 'text-[#2C2C2C]' : 'text-[#6B6B6B]'}>
+                      {session.title}
+                    </span>
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteSession(session.id);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md opacity-0 group-hover:opacity-100 hover:bg-[#F5EFE7] transition-opacity"
+                  title="Delete session"
+                >
+                  <Trash2 className="w-4 h-4 text-[#9B9B9B] hover:text-[#C97C5D]" />
+                </button>
+              </div>
             ))}
           </div>
         </div>
