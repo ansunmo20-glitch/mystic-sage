@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Flower2, Coffee, Mail, LogOut } from 'lucide-react';
+import { Send, Flower2, Coffee, Mail, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
 import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
 import { Modal } from './Modal';
 import { SessionSidebar } from './SessionSidebar';
+import { Settings } from './Settings';
 import { resetSessionForUser } from '../lib/devUtils';
+import { exportConversations } from '../lib/exportConversations';
 import {
   ChatSession,
   getAllSessions,
@@ -42,6 +44,7 @@ export function Chat() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -245,6 +248,11 @@ export function Chat() {
     }
   };
 
+  const handleDeleteAccount = () => {
+    localStorage.clear();
+    handleSignOut();
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -318,6 +326,14 @@ export function Chat() {
                 New
               </button>
             )}
+
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-2 hover:bg-[#F5EFE7] rounded-lg transition-colors"
+              aria-label="Settings"
+            >
+              <SettingsIcon className="w-5 h-5 text-[#6B6B6B]" />
+            </button>
 
             <button
               onClick={handleSignOut}
@@ -462,6 +478,16 @@ export function Chat() {
         title={modalTitle}
         message={modalMessage}
       />
+
+      {settingsOpen && user && (
+        <Settings
+          userEmail={user.primaryEmailAddress?.emailAddress || ''}
+          onClose={() => setSettingsOpen(false)}
+          onSignOut={handleSignOut}
+          onExportConversations={exportConversations}
+          onDeleteAccount={handleDeleteAccount}
+        />
+      )}
     </div>
   );
 }
