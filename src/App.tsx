@@ -5,6 +5,7 @@ import { Chat } from './components/Chat';
 import Login from './components/Login';
 import { TermsOfService } from './components/TermsOfService';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { Admin } from './components/Admin';
 import { hasSeenWelcome, markWelcomeSeen } from './lib/storage';
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -13,7 +14,7 @@ if (!clerkPubKey) {
   throw new Error('Missing Clerk Publishable Key');
 }
 
-type Page = 'main' | 'terms' | 'privacy';
+type Page = 'main' | 'terms' | 'privacy' | 'admin';
 
 function AppContent() {
   const [showWelcome, setShowWelcome] = useState(true);
@@ -31,6 +32,8 @@ function AppContent() {
       setCurrentPage('terms');
     } else if (path === '/privacy') {
       setCurrentPage('privacy');
+    } else if (path === '/admin') {
+      setCurrentPage('admin');
     }
   }, []);
 
@@ -41,6 +44,8 @@ function AppContent() {
         setCurrentPage('terms');
       } else if (path === '/privacy') {
         setCurrentPage('privacy');
+      } else if (path === '/admin') {
+        setCurrentPage('admin');
       } else {
         setCurrentPage('main');
       }
@@ -72,6 +77,10 @@ function AppContent() {
 
   if (!isReady) {
     return null;
+  }
+
+  if (currentPage === 'admin') {
+    return <Admin />;
   }
 
   if (currentPage === 'terms') {
