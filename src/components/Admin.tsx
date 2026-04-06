@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Shield, Key, RefreshCw, Gift, Ban, CheckCircle } from 'lucide-react';
+import { Shield, RefreshCw, Gift, Ban, CheckCircle } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 import { supabase } from '../lib/supabase';
 
 interface UserSession {
@@ -14,26 +15,21 @@ interface UserSession {
 }
 
 export function Admin() {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const { user, isLoaded } = useUser();
   const [users, setUsers] = useState<UserSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editMaxTokens, setEditMaxTokens] = useState('');
 
-  const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+  const isAdmin = user?.primaryEmailAddress?.emailAddress === adminEmail;
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === adminPassword) {
-      setAuthenticated(true);
-      setError('');
+  useEffect(() => {
+    if (isLoaded && isAdmin) {
       loadUsers();
-    } else {
-      setError('Invalid password');
     }
-  };
+  }, [isLoaded, isAdmin]);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -117,41 +113,23 @@ export function Admin() {
     return userId.substring(0, 8);
   };
 
-  if (!authenticated) {
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-[#FAF6EF] flex items-center justify-center">
+        <div className="text-[#6B6B6B]">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-[#FAF6EF] flex items-center justify-center px-6">
-        <div className="bg-white rounded-lg shadow-warm border border-[#E8DED0] p-8 w-full max-w-md">
-          <div className="flex items-center gap-3 mb-6">
-            <Shield className="w-6 h-6 text-[#C4A96E]" />
-            <h1 className="text-2xl font-light text-[#2C2C2C]">Admin Panel</h1>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm text-[#6B6B6B] mb-2">
-                <Key className="w-4 h-4 inline mr-1" />
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-[#FAF6EF] border border-[#E8DED0] rounded-lg text-[#2C2C2C] focus:outline-none focus:border-[#C4A96E]"
-                placeholder="Enter admin password"
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-[#C97C5D]">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              className="w-full px-4 py-2 bg-[#C4A96E] text-white rounded-lg hover:bg-[#B39A5E] transition-colors"
-            >
-              Login
-            </button>
-          </form>
+        <div className="bg-white rounded-lg shadow-warm border border-[#E8DED0] p-8 w-full max-w-md text-center">
+          <Shield className="w-12 h-12 text-[#C97C5D] mx-auto mb-4" />
+          <h1 className="text-2xl font-light text-[#2C2C2C] mb-2">Access Denied</h1>
+          <p className="text-[#6B6B6B]">
+            You do not have permission to access the admin panel.
+          </p>
         </div>
       </div>
     );
