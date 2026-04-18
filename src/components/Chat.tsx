@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Send, Flower2, LogOut, Settings as SettingsIcon, Home, BookOpen } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
-import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
+import { checkAndUpdateSession, getCurrentSessionUsage, ensureUserTokens } from '../lib/sessions';
 import { Modal } from './Modal';
 import { SessionSidebar } from './SessionSidebar';
 import { Settings } from './Settings';
@@ -51,7 +51,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const [canUseSession, setCanUseSession] = useState(true);
   const [hasStarted, setHasStarted] = useState(false);
   const [tokensUsed, setTokensUsed] = useState(0);
-  const [maxTokens, setMaxTokens] = useState(100000);
+  const [maxTokens, setMaxTokens] = useState(10000);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
@@ -77,7 +77,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }
 
     if (user) {
-      loadSessionUsage();
+      const email = user.emailAddresses?.[0]?.emailAddress || user.id;
+      ensureUserTokens(user.id, email).then(() => loadSessionUsage());
     }
   }, [user]);
 
@@ -86,11 +87,18 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
     try {
       const usage = await getCurrentSessionUsage(user.id);
+      const resolvedMaxTokens = usage.maxTokens ?? 10000;
+      const resolvedTokensUsed = usage.tokensUsed ?? 0;
       setSessionsUsed(usage.sessionsUsed);
       setMaxSessions(usage.maxSessions);
-      setCanUseSession(usage.sessionsUsed < usage.maxSessions);
-      setTokensUsed(usage.tokensUsed);
-      setMaxTokens(usage.maxTokens);
+      setTokensUsed(resolvedTokensUsed);
+      setMaxTokens(resolvedMaxTokens);
+      setCanUseSession(resolvedTokensUsed < resolvedMaxTokens);
+      console.log(
+        '[Chat] loadSessionUsage — tokensUsed:', resolvedTokensUsed,
+        'maxTokens:', resolvedMaxTokens,
+        'canUse:', resolvedTokensUsed < resolvedMaxTokens
+      );
     } catch (error) {
       console.error('Error loading session usage:', error);
     }
@@ -112,9 +120,17 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     if (!messageText || loading || !user || !currentSession) return;
 
     if (!hasStarted) {
-      if (!canUseSession) {
+      const currentTokensUsed = tokensUsed ?? 0;
+      const currentMaxTokens = maxTokens ?? 10000;
+      console.log(
+        '[Chat] handleSend pre-check — tokensUsed:', currentTokensUsed,
+        'maxTokens:', currentMaxTokens,
+        'canUseSession:', canUseSession
+      );
+
+      if (currentTokensUsed >= currentMaxTokens) {
         setModalTitle('Session Limit Reached');
-        setModalMessage("You've used your session this week. Come back next Monday for a fresh start!");
+        setModalMessage("You've used all your tokens this week. Come back next Monday for a fresh start!");
         setModalOpen(true);
         return;
       }
@@ -124,11 +140,22 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         const result = await checkAndUpdateSession(user.id, email);
         setSessionsUsed(result.sessionsUsed);
         setMaxSessions(result.maxSessions);
+
+        const resultMaxTokens = result.maxTokens ?? 10000;
+        const resultTokensUsed = result.tokensUsed ?? 0;
+        setMaxTokens(resultMaxTokens);
+        setTokensUsed(resultTokensUsed);
         setCanUseSession(result.canUseSession);
+
+        console.log(
+          '[Chat] checkAndUpdateSession result — canUse:', result.canUseSession,
+          'tokensUsed:', resultTokensUsed,
+          'maxTokens:', resultMaxTokens
+        );
 
         if (!result.canUseSession) {
           setModalTitle('Session Limit Reached');
-          setModalMessage(result.message || 'Session limit reached');
+          setModalMessage(result.message || 'Token limit reached. Resets every Monday.');
           setModalOpen(true);
           return;
         }
@@ -314,7 +341,9 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }
   };
 
-  const tokenPercentage = maxTokens > 0 ? ((maxTokens - tokensUsed) / maxTokens) * 100 : 0;
+  const safeMaxTokens = maxTokens || 10000;
+  const safeTokensUsed = tokensUsed || 0;
+  const tokenPercentage = safeMaxTokens > 0 ? Math.max(0, Math.min(100, ((safeMaxTokens - safeTokensUsed) / safeMaxTokens) * 100)) : 0;
   const capacityColor = tokenPercentage > 30 ? '#C4A96E' : tokenPercentage > 10 ? '#D4A574' : '#C97C5D';
   const showLimitScreen = !canUseSession && hasStarted;
 
@@ -358,7 +387,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                 />
               </div>
               <p className="text-xs text-[#9B9B9B] mt-1">
-                {Math.round((tokensUsed / 1000) * 10) / 10}k / {maxTokens / 1000}k tokens
+                {Math.round((safeTokensUsed / 1000) * 10) / 10}k / {safeMaxTokens / 1000}k tokens
               </p>
             </div>
 
