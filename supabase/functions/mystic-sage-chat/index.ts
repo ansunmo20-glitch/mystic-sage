@@ -17,6 +17,17 @@ interface RequestBody {
   userId: string;
 }
 
+interface PineconeMatch {
+  id: string;
+  score: number;
+  metadata?: {
+    text?: string;
+    [key: string]: unknown;
+  };
+}
+
+const PINECONE_HOST = "https://mystic-sage-qmhcmir.svc.aped-4627-b74a.pinecone.io";
+
 const SYSTEM_PROMPT = `You are Mystic Sage — a calm, grounded presence rooted in Buddhist and Taoist wisdom.
 You are not a chatbot. You are not a therapist. You are not a search engine.
 You are something older — a quiet mind that listens before it speaks.
@@ -266,6 +277,71 @@ Examples:
 
 Return ONLY valid JSON. Do not include any text outside the JSON structure.`;
 
+async function generateEmbedding(text: string, openaiApiKey: string): Promise<number[]> {
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${openaiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: "text-embedding-3-small",
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI embedding error: ${response.status} — ${error}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding as number[];
+}
+
+async function queryPinecone(embedding: number[], pineconeApiKey: string, topK = 5): Promise<PineconeMatch[]> {
+  const response = await fetch(`${PINECONE_HOST}/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Api-Key": pineconeApiKey,
+    },
+    body: JSON.stringify({
+      vector: embedding,
+      topK,
+      includeMetadata: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Pinecone query error: ${response.status} — ${error}`);
+  }
+
+  const data = await response.json();
+  return (data.matches || []) as PineconeMatch[];
+}
+
+function buildRagContext(matches: PineconeMatch[]): string {
+  const chunks = matches
+    .filter(m => m.metadata?.text)
+    .map((m, i) => `[${i + 1}] ${m.metadata!.text!.trim()}`);
+
+  if (chunks.length === 0) return "";
+
+  return `━━━━━━━━━━━━━━━━━━━━━━━━
+RELEVANT WISDOM & CONTEXT
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+The following passages are relevant to what the user is sharing.
+Draw on them naturally — do not quote them directly or reference them explicitly.
+Let them inform your perspective, not dominate your response.
+
+${chunks.join("\n\n")}
+
+━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -276,16 +352,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    const pineconeApiKey = Deno.env.get("PINECONE_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!anthropicApiKey) {
-      throw new Error("ANTHROPIC_API_KEY not configured");
-    }
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase credentials not configured");
-    }
+    if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+    if (!supabaseUrl || !supabaseKey) throw new Error("Supabase credentials not configured");
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -294,30 +367,34 @@ Deno.serve(async (req: Request) => {
     if (!messages || !Array.isArray(messages)) {
       return new Response(
         JSON.stringify({ error: "Invalid request: messages array required" }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!userId) {
       return new Response(
         JSON.stringify({ error: "Invalid request: userId required" }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // OPTIMIZATION 2: Conversation history compression - keep last 4 turns, summarize earlier
+    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+
+    let ragContextBlock = "";
+    if (openaiApiKey && pineconeApiKey && lastUserMessage) {
+      try {
+        const embedding = await generateEmbedding(lastUserMessage.content, openaiApiKey);
+        const matches = await queryPinecone(embedding, pineconeApiKey, 5);
+        ragContextBlock = buildRagContext(matches);
+      } catch (ragError) {
+        console.error("RAG pipeline error (non-fatal):", ragError);
+      }
+    }
+
+    const finalSystemPrompt = ragContextBlock
+      ? `${ragContextBlock}\n\n${SYSTEM_PROMPT}`
+      : SYSTEM_PROMPT;
+
     let processedMessages = messages;
     if (messages.length > 8) {
       const recentMessages = messages.slice(-8);
@@ -335,7 +412,6 @@ Deno.serve(async (req: Request) => {
       ];
     }
 
-    // OPTIMIZATION 1: Prompt caching with cache_control
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -349,7 +425,7 @@ Deno.serve(async (req: Request) => {
         system: [
           {
             type: "text",
-            text: SYSTEM_PROMPT,
+            text: finalSystemPrompt,
             cache_control: { type: "ephemeral" }
           }
         ],
@@ -364,14 +440,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const data = await response.json();
-    let messageText = data.content[0].text;
+    const messageText = data.content[0].text;
 
-    // Extract token usage from the response
     const inputTokens = data.usage?.input_tokens || 0;
     const outputTokens = data.usage?.output_tokens || 0;
     const totalTokens = inputTokens + outputTokens;
 
-    // Update token usage in the database
     try {
       const { data: sessionData, error: fetchError } = await supabase
         .from('user_sessions')
@@ -425,7 +499,6 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    // Add token usage to the response
     parsedResponse.tokenUsage = {
       input: inputTokens,
       output: outputTokens,
@@ -436,10 +509,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify(parsedResponse),
       {
         status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   } catch (error) {
@@ -450,10 +520,7 @@ Deno.serve(async (req: Request) => {
       }),
       {
         status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }
