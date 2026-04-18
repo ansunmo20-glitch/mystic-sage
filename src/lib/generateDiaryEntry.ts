@@ -5,13 +5,15 @@ export async function generateDiaryEntry(draft: DiaryDraft): Promise<DiaryEntry>
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+  const firstUserMessage = draft.messages.find(m => m.role === 'user')?.content ?? 'Had a conversation today.';
+
   const fallbackEntry: DiaryEntry = {
     id: crypto.randomUUID(),
     date: draft.date,
-    summary: draft.messages.find(m => m.role === 'user')?.content ?? '',
-    emotionBefore: '',
-    emotionAfter: '',
-    sageMessage: '',
+    summary: firstUserMessage,
+    emotionBefore: 'overwhelmed',
+    emotionAfter: 'unknown',
+    sageMessage: 'Every step forward counts, however small.',
     originalChat: draft.messages,
     bgColor: '#faf6ef',
     theme: 'default',
@@ -19,7 +21,12 @@ export async function generateDiaryEntry(draft: DiaryDraft): Promise<DiaryEntry>
   };
 
   try {
-    if (!supabaseUrl || !supabaseAnonKey) return fallbackEntry;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.log('[Diary] Missing Supabase config, using fallback');
+      return fallbackEntry;
+    }
+
+    console.log('[Diary] Generating diary for', draft.messages.length, 'messages');
 
     const apiUrl = `${supabaseUrl}/functions/v1/mystic-sage-chat`;
 
@@ -35,29 +42,42 @@ export async function generateDiaryEntry(draft: DiaryDraft): Promise<DiaryEntry>
       }),
     });
 
-    if (!response.ok) return fallbackEntry;
+    console.log('[Diary] API response status:', response.status);
+
+    if (!response.ok) {
+      console.log('[Diary] API call failed with status', response.status);
+      return fallbackEntry;
+    }
 
     const data = await response.json();
-    const text: string = data.message ?? '';
+    const rawText: string = data.message ?? '';
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return fallbackEntry;
+    console.log('[Diary] Raw response text:', rawText);
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const clean = rawText.replace(/```json|```/g, '').trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (parseErr) {
+      console.log('[Diary] JSON parse failed:', parseErr, '| Raw text was:', rawText);
+      return fallbackEntry;
+    }
 
     return {
       id: crypto.randomUUID(),
       date: draft.date,
       summary: parsed.summary ?? fallbackEntry.summary,
-      emotionBefore: parsed.emotionBefore ?? '',
-      emotionAfter: parsed.emotionAfter ?? '',
-      sageMessage: parsed.sageMessage ?? '',
+      emotionBefore: parsed.emotionBefore ?? fallbackEntry.emotionBefore,
+      emotionAfter: parsed.emotionAfter ?? fallbackEntry.emotionAfter,
+      sageMessage: parsed.sageMessage ?? fallbackEntry.sageMessage,
       originalChat: draft.messages,
       bgColor: '#faf6ef',
       theme: 'default',
       character: null,
     };
-  } catch {
+  } catch (err) {
+    console.log('[Diary] Unexpected error:', err);
     return fallbackEntry;
   }
 }

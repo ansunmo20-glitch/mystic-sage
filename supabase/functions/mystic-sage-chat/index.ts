@@ -408,15 +408,16 @@ Deno.serve(async (req: Request) => {
     }
 
     if (isDiarySummary) {
-      const DIARY_SYSTEM_PROMPT = `You are summarizing a counseling session into a diary entry.
-Return ONLY valid JSON with these exact fields:
+      const DIARY_SYSTEM_PROMPT = `You are a diary summarizer. Analyze the counseling conversation and return ONLY a raw JSON object with NO markdown formatting, NO backticks, NO explanation. Just the JSON object itself.
+Required format:
 {
-  "summary": "string (first-person, starting with 'Today I...', 2-3 sentences)",
-  "emotionBefore": "string (1-3 words, e.g. 'anxious', 'overwhelmed')",
-  "emotionAfter": "string (1-3 words, e.g. 'calmer', 'lighter')",
-  "sageMessage": "string (the most meaningful insight from the session, reframed as modern everyday language — no scripture quotes)"
-}
-Do not include any other text, markdown, or explanation.`;
+  "summary": "1-2 sentences in first person starting with Today I...",
+  "emotionBefore": "1-3 words describing how user felt at start",
+  "emotionAfter": "1-3 words describing how user felt at end",
+  "sageMessage": "the most meaningful insight from the session in modern everyday language, not a scripture quote"
+}`;
+
+      console.log("Diary summary request, message count:", messages.length);
 
       const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -433,16 +434,23 @@ Do not include any other text, markdown, or explanation.`;
         }),
       });
 
+      console.log("Diary API response status:", diaryResponse.status);
+
       if (!diaryResponse.ok) {
         const err = await diaryResponse.text();
+        console.error("Diary API error body:", err);
         throw new Error(`Diary API error: ${diaryResponse.status} — ${err}`);
       }
 
       const diaryData = await diaryResponse.json();
-      const diaryText = diaryData.content[0].text;
+      const rawDiaryText = diaryData.content[0].text as string;
+
+      console.log("Diary raw response:", rawDiaryText);
+
+      const cleanDiaryText = rawDiaryText.replace(/```json|```/g, '').trim();
 
       return new Response(
-        JSON.stringify({ message: diaryText }),
+        JSON.stringify({ message: cleanDiaryText }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
