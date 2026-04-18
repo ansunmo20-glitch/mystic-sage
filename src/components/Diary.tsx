@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { DiaryDetail } from './DiaryDetail';
 import { loadDiaryEntries } from '../lib/diaryStorage';
+import { isEntryLocked } from '../lib/config';
 import type { DiaryEntry } from '../lib/diaryTypes';
 
 const MONTHS = [
@@ -24,11 +25,71 @@ interface DiaryProps {
   onNavigateHome: () => void;
 }
 
+const IS_PAID_USER = false;
+
+function UpgradeModal({ onClose }: { onClose: () => void }) {
+  const [showToast, setShowToast] = useState(false);
+
+  const handleUpgrade = () => {
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+    }, 2500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-8 sm:items-center sm:pb-0">
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(61,46,30,0.45)' }}
+        onClick={onClose}
+      />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4 animate-[slideUp_0.22s_ease-out]">
+        <div className="flex flex-col items-center text-center gap-2">
+          <span className="text-3xl">🔒</span>
+          <p className="font-serif text-xl" style={{ color: '#3d2e1e' }}>
+            This memory is locked
+          </p>
+          <p className="text-sm leading-relaxed" style={{ color: '#a89070' }}>
+            Entries older than 2 months are available on the paid plan. Upgrade to unlock your full journal history.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 pt-1">
+          <button
+            onClick={handleUpgrade}
+            className="w-full py-3.5 rounded-2xl text-white font-medium text-sm transition-all"
+            style={{ backgroundColor: '#c4a96e' }}
+          >
+            Upgrade to Pro
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-2xl text-sm transition-colors"
+            style={{ color: '#a89070' }}
+          >
+            Maybe later
+          </button>
+        </div>
+      </div>
+
+      {showToast && (
+        <div
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full text-sm font-medium shadow-lg z-[60] pointer-events-none"
+          style={{ backgroundColor: '#3d2e1e', color: '#f5efe7' }}
+        >
+          Coming soon
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Diary({ onNavigateHome }: DiaryProps) {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const today = todayStr();
   const entries = loadDiaryEntries();
@@ -55,6 +116,14 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   const isTodayCell = (day: number): boolean => {
     const key = `${viewYear}-${padded(viewMonth + 1)}-${padded(day)}`;
     return key === today;
+  };
+
+  const handleEntryClick = (entry: DiaryEntry) => {
+    if (isEntryLocked(entry.date, IS_PAID_USER)) {
+      setShowUpgrade(true);
+    } else {
+      setSelectedEntry(entry);
+    }
   };
 
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
@@ -130,10 +199,11 @@ export function Diary({ onNavigateHome }: DiaryProps) {
                   }
                   const entry = getEntry(day);
                   const isToday = isTodayCell(day);
+                  const locked = entry ? isEntryLocked(entry.date, IS_PAID_USER) : false;
                   return (
                     <div key={day} className="h-11 flex flex-col items-center justify-start pt-1">
                       <button
-                        onClick={() => entry && setSelectedEntry(entry)}
+                        onClick={() => entry && handleEntryClick(entry)}
                         disabled={!entry && !isToday}
                         className="w-8 h-8 flex items-center justify-center rounded-full transition-all"
                         style={{
@@ -152,7 +222,7 @@ export function Diary({ onNavigateHome }: DiaryProps) {
                         {entry && !isToday && (
                           <span
                             className="block w-[5px] h-[5px] rounded-full"
-                            style={{ backgroundColor: '#c4a96e' }}
+                            style={{ backgroundColor: locked ? '#c4b99a' : '#c4a96e' }}
                           />
                         )}
                         {entry && isToday && (
@@ -178,30 +248,37 @@ export function Diary({ onNavigateHome }: DiaryProps) {
             Recent Entries
           </h3>
           <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e2d8c8' }}>
-            {recentEntries.map((entry, idx) => (
-              <button
-                key={entry.id}
-                onClick={() => setSelectedEntry(entry)}
-                className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#fdf8f2]"
-                style={{
-                  borderTop: idx === 0 ? 'none' : '1px solid #ede4d6',
-                }}
-              >
-                <div
-                  className="text-xs font-medium shrink-0 w-[70px]"
-                  style={{ color: '#a89070' }}
+            {recentEntries.map((entry, idx) => {
+              const locked = isEntryLocked(entry.date, IS_PAID_USER);
+              return (
+                <button
+                  key={entry.id}
+                  onClick={() => handleEntryClick(entry)}
+                  className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#fdf8f2]"
+                  style={{
+                    borderTop: idx === 0 ? 'none' : '1px solid #ede4d6',
+                  }}
                 >
-                  {formatShortDate(entry.date)}
-                </div>
-                <div
-                  className="flex-1 min-w-0 text-sm truncate"
-                  style={{ color: '#3d2e1e' }}
-                >
-                  {entry.summary}
-                </div>
-                <ChevronRight className="w-4 h-4 shrink-0" style={{ color: '#c4a96e' }} strokeWidth={2} />
-              </button>
-            ))}
+                  <div
+                    className="text-xs font-medium shrink-0 w-[70px]"
+                    style={{ color: locked ? '#c4b99a' : '#a89070' }}
+                  >
+                    {formatShortDate(entry.date)}
+                  </div>
+                  <div
+                    className="flex-1 min-w-0 text-sm truncate"
+                    style={{ color: locked ? '#c4b99a' : '#3d2e1e' }}
+                  >
+                    {entry.summary}
+                  </div>
+                  {locked ? (
+                    <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: '#c4b99a' }} strokeWidth={2} />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 shrink-0" style={{ color: '#c4a96e' }} strokeWidth={2} />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       </main>
@@ -226,6 +303,8 @@ export function Diary({ onNavigateHome }: DiaryProps) {
           <span className="text-[10px] font-medium tracking-wide">Diary</span>
         </button>
       </nav>
+
+      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
     </div>
   );
 }

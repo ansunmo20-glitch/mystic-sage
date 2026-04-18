@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Home, BookOpen, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, Home, BookOpen, Pencil, Trash2, Lock } from 'lucide-react';
 import type { DiaryEntry } from '../lib/diaryTypes';
 import { updateDiaryEntry, deleteDiaryEntry } from '../lib/diaryStorage';
+import { isEntryLocked } from '../lib/config';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -17,6 +18,7 @@ interface DiaryDetailProps {
   entry: DiaryEntry;
   onBack: () => void;
   onNavigateHome: () => void;
+  isPaidUser?: boolean;
 }
 
 function AutoTextarea({
@@ -52,9 +54,10 @@ function AutoTextarea({
   );
 }
 
-export function DiaryDetail({ entry, onBack, onNavigateHome }: DiaryDetailProps) {
+export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false }: DiaryDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const locked = isEntryLocked(entry.date, isPaidUser);
 
   const [summary, setSummary] = useState(entry.summary);
   const [emotionBefore, setEmotionBefore] = useState(entry.emotionBefore);
@@ -107,7 +110,7 @@ export function DiaryDetail({ entry, onBack, onNavigateHome }: DiaryDetailProps)
             </h1>
           </div>
 
-          {!isEditing && (
+          {!isEditing && !locked && (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setIsEditing(true)}
@@ -128,7 +131,29 @@ export function DiaryDetail({ entry, onBack, onNavigateHome }: DiaryDetailProps)
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full space-y-4">
+      <main className="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full space-y-4 relative">
+        {locked && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 pt-8 pb-8"
+            style={{ backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', backgroundColor: 'rgba(250,246,239,0.7)' }}
+          >
+            <div className="bg-white rounded-2xl shadow-lg w-full max-w-xs p-6 flex flex-col items-center text-center gap-3">
+              <Lock className="w-7 h-7" style={{ color: '#c4b99a' }} strokeWidth={1.5} />
+              <p className="font-serif text-xl" style={{ color: '#3d2e1e' }}>
+                This memory is locked
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: '#a89070' }}>
+                Entries older than 2 months are available on the paid plan. Upgrade to unlock your full journal history.
+              </p>
+              <button
+                onClick={onBack}
+                className="mt-1 w-full py-3 rounded-2xl text-sm transition-colors"
+                style={{ color: '#a89070' }}
+              >
+                Go back
+              </button>
+            </div>
+          </div>
+        )}
         {isEditing ? (
           <>
             <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: '#e2d8c8' }}>
