@@ -498,7 +498,6 @@ Do not include any other text, markdown, or explanation.`;
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 2048,
-        stream: true,
         system: [
           {
             type: "text",
@@ -516,42 +515,10 @@ Do not include any other text, markdown, or explanation.`;
       throw new Error(`API error: ${anthropicResponse.status}`);
     }
 
-    const reader = anthropicResponse.body!.getReader();
-    const decoder = new TextDecoder();
-    let sseBuffer = "";
-    let fullText = "";
-    let inputTokens = 0;
-    let outputTokens = 0;
-    const textChunks: string[] = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      sseBuffer += decoder.decode(value, { stream: true });
-      const lines = sseBuffer.split("\n");
-      sseBuffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (!data || data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-            const chunk = parsed.delta.text as string;
-            fullText += chunk;
-            textChunks.push(chunk);
-          } else if (parsed.type === "message_delta" && parsed.usage) {
-            outputTokens = parsed.usage.output_tokens || 0;
-          } else if (parsed.type === "message_start" && parsed.message?.usage) {
-            inputTokens = parsed.message.usage.input_tokens || 0;
-          }
-        } catch {
-        }
-      }
-    }
-
+    const anthropicData = await anthropicResponse.json();
+    const fullText = anthropicData.content[0].text as string;
+    const inputTokens = anthropicData.usage?.input_tokens || 0;
+    const outputTokens = anthropicData.usage?.output_tokens || 0;
     const totalTokens = inputTokens + outputTokens;
 
     EdgeRuntime.waitUntil((async () => {
@@ -602,7 +569,6 @@ Do not include any other text, markdown, or explanation.`;
       JSON.stringify({
         message: parsedResponse.message,
         options: parsedResponse.options,
-        chunks: textChunks,
         tokenUsage: { input: inputTokens, output: outputTokens, total: totalTokens },
       }),
       {

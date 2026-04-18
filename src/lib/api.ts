@@ -4,7 +4,6 @@ interface Message {
 }
 
 export interface StreamCallbacks {
-  onChunk: (text: string) => void;
   onDone: (message: string, options: string[], tokenUsage: { input: number; output: number; total: number }) => void;
   onError: (error: string) => void;
 }
@@ -17,9 +16,7 @@ export async function sendMessage(messages: Message[], userId: string, callbacks
     throw new Error('Supabase configuration not found');
   }
 
-  const apiUrl = `${supabaseUrl}/functions/v1/mystic-sage-chat`;
-
-  const response = await fetch(apiUrl, {
+  const response = await fetch(`${supabaseUrl}/functions/v1/mystic-sage-chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -40,18 +37,9 @@ export async function sendMessage(messages: Message[], userId: string, callbacks
     return;
   }
 
-  const chunks: string[] = data.chunks || [];
-  const tokenUsage = data.tokenUsage || { input: 0, output: 0, total: 0 };
-
-  if (chunks.length === 0) {
-    callbacks.onDone(data.message, data.options || [], tokenUsage);
-    return;
-  }
-
-  for (const chunk of chunks) {
-    callbacks.onChunk(chunk);
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
-  }
-
-  callbacks.onDone(data.message, data.options || [], tokenUsage);
+  callbacks.onDone(
+    data.message,
+    data.options || [],
+    data.tokenUsage || { input: 0, output: 0, total: 0 }
+  );
 }

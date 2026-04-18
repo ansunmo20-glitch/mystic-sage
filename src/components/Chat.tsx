@@ -56,7 +56,6 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
-  const [streamingId, setStreamingId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -198,16 +197,13 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     saveSession(updatedSession);
     setAllSessions(getAllSessions());
 
-    const assistantId = crypto.randomUUID();
-    const assistantMessage: Message = {
-      id: assistantId,
+    const assistantPlaceholderId = crypto.randomUUID();
+    setMessages([...newMessages, {
+      id: assistantPlaceholderId,
       role: 'assistant',
       content: '',
       timestamp: new Date().toISOString(),
-    };
-
-    setMessages([...newMessages, assistantMessage]);
-    setStreamingId(assistantId);
+    }]);
 
     const apiMessages = newMessages.map((msg) => ({
       role: msg.role,
@@ -215,23 +211,16 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }));
 
     const callbacks: StreamCallbacks = {
-      onChunk: (text) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + text } : m
-          )
-        );
-      },
       onDone: (message, _options, tokenUsage) => {
+        const timestamp = new Date().toISOString();
         const finalMessages = newMessages.concat([{
-          id: assistantId,
+          id: assistantPlaceholderId,
           role: 'assistant' as const,
           content: message,
-          timestamp: assistantMessage.timestamp,
+          timestamp,
         }]);
 
         setMessages(finalMessages);
-        setStreamingId(null);
         setLoading(false);
 
         const finalSession = {
@@ -258,9 +247,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         }
       },
       onError: (error) => {
-        console.error('Stream error:', error);
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        setStreamingId(null);
+        console.error('Error:', error);
+        setMessages((prev) => prev.filter((m) => m.id !== assistantPlaceholderId));
         setLoading(false);
         alert('Failed to send message. Please try again.');
       },
@@ -270,8 +258,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       await sendMessage(apiMessages, user.id, callbacks);
     } catch (error) {
       console.error('Error:', error);
-      setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-      setStreamingId(null);
+      setMessages((prev) => prev.filter((m) => m.id !== assistantPlaceholderId));
       setLoading(false);
       alert('Failed to send message. Please try again.');
     }
@@ -491,19 +478,14 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                     : 'bg-white border border-[#E8DED0] text-[#2C2C2C] shadow-sm'
                 }`}
               >
-                {message.role === 'assistant' && streamingId === message.id && message.content === '' ? (
+                {message.role === 'assistant' && loading && message.content === '' ? (
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                     <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                     <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap leading-relaxed">
-                    {message.content}
-                    {streamingId === message.id && (
-                      <span className="inline-block w-0.5 h-4 bg-[#C4A96E] ml-0.5 align-middle animate-pulse" />
-                    )}
-                  </p>
+                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                 )}
               </div>
             </div>
