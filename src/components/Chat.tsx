@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Send, Flower2, LogOut, Settings as SettingsIcon, Home, BookOpen } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
+import type { StreamCallbacks } from '../lib/api';
 import { checkAndUpdateSession, getCurrentSessionUsage, ensureUserTokens } from '../lib/sessions';
 import { Modal } from './Modal';
 import { SessionSidebar } from './SessionSidebar';
@@ -55,6 +56,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
+  const [streamingId, setStreamingId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -196,51 +198,82 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     saveSession(updatedSession);
     setAllSessions(getAllSessions());
 
+    const assistantId = crypto.randomUUID();
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages([...newMessages, assistantMessage]);
+    setStreamingId(assistantId);
+
+    const apiMessages = newMessages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    const callbacks: StreamCallbacks = {
+      onChunk: (text) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, content: m.content + text } : m
+          )
+        );
+      },
+      onDone: (message, _options, tokenUsage) => {
+        const finalMessages = newMessages.concat([{
+          id: assistantId,
+          role: 'assistant' as const,
+          content: message,
+          timestamp: assistantMessage.timestamp,
+        }]);
+
+        setMessages(finalMessages);
+        setStreamingId(null);
+        setLoading(false);
+
+        const finalSession = {
+          ...updatedSession,
+          messages: finalMessages,
+          updatedAt: new Date().toISOString(),
+        };
+        setCurrentSession(finalSession);
+        saveSession(finalSession);
+        setAllSessions(getAllSessions());
+
+        const draftMessages = finalMessages.map(m => ({ role: m.role, content: m.content }));
+        const turns = countTurns(draftMessages);
+        if (turns > 0 && turns % 3 === 0) {
+          saveDiaryDraft({
+            sessionId: finalSession.id,
+            date: new Date().toISOString().slice(0, 10),
+            messages: draftMessages,
+          });
+        }
+
+        if (tokenUsage) {
+          setTokensUsed((prev) => prev + tokenUsage.total);
+        }
+      },
+      onError: (error) => {
+        console.error('Stream error:', error);
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        setStreamingId(null);
+        setLoading(false);
+        alert('Failed to send message. Please try again.');
+      },
+    };
+
     try {
-      const apiMessages = newMessages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-
-      const response = await sendMessage(apiMessages, user.id);
-
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date().toISOString(),
-      };
-
-      const finalMessages = [...newMessages, assistantMessage];
-      setMessages(finalMessages);
-
-      const finalSession = {
-        ...updatedSession,
-        messages: finalMessages,
-        updatedAt: new Date().toISOString()
-      };
-      setCurrentSession(finalSession);
-      saveSession(finalSession);
-      setAllSessions(getAllSessions());
-
-      const draftMessages = finalMessages.map(m => ({ role: m.role, content: m.content }));
-      const turns = countTurns(draftMessages);
-      if (turns > 0 && turns % 3 === 0) {
-        saveDiaryDraft({
-          sessionId: finalSession.id,
-          date: new Date().toISOString().slice(0, 10),
-          messages: draftMessages,
-        });
-      }
-
-      if (response.tokenUsage) {
-        setTokensUsed((prev) => prev + response.tokenUsage.total);
-      }
+      await sendMessage(apiMessages, user.id, callbacks);
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to send message. Please try again.');
-    } finally {
+      setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+      setStreamingId(null);
       setLoading(false);
+      alert('Failed to send message. Please try again.');
     }
   };
 
@@ -348,7 +381,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const showLimitScreen = !canUseSession && hasStarted;
 
   return (
-    <div className="min-h-screen bg-[#FAF6EF] flex flex-col pb-[52px]">
+    <div className="min-h-screen bg-[#FAF6EF] flex flex-col">
       <SessionSidebar
         sessions={allSessions}
         activeSessionId={currentSession?.id || null}
@@ -411,7 +444,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-6 py-8">
+      <main className="flex-1 overflow-y-auto px-6 py-8 pb-[120px]">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !showLimitScreen && (
             <div className="text-center py-12 space-y-8">
@@ -458,34 +491,30 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                     : 'bg-white border border-[#E8DED0] text-[#2C2C2C] shadow-sm'
                 }`}
               >
-                <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                {message.role === 'assistant' && streamingId === message.id && message.content === '' ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {message.content}
+                    {streamingId === message.id && (
+                      <span className="inline-block w-0.5 h-4 bg-[#C4A96E] ml-0.5 align-middle animate-pulse" />
+                    )}
+                  </p>
+                )}
               </div>
             </div>
           ))}
-
-          {loading && (
-            <div className="flex justify-start">
-              <div className="flex-shrink-0 mr-3 mt-1">
-                <div className="w-8 h-8 rounded-full bg-white border border-[#E8DED0] flex items-center justify-center">
-                  <Flower2 className="w-4 h-4 text-[#C4A96E]" strokeWidth={1.5} />
-                </div>
-              </div>
-              <div className="bg-white border border-[#E8DED0] rounded-2xl px-6 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div ref={messagesEndRef} />
         </div>
       </main>
 
       {!showLimitScreen && (
-        <footer className="bg-white border-t border-[#E8DED0] px-6 py-4 shadow-warm-top">
+        <footer className="fixed left-0 right-0 bg-white border-t border-[#E8DED0] px-6 py-4 shadow-warm-top" style={{ bottom: '52px', zIndex: 40 }}>
           <div className="max-w-4xl mx-auto">
             <div className="flex gap-3 items-end">
               <textarea
@@ -512,7 +541,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
       <nav
         className="fixed bottom-0 left-0 right-0 bg-[#faf6ef] border-t border-[#e2d8c8] flex items-center"
-        style={{ height: '52px' }}
+        style={{ height: '52px', zIndex: 50 }}
       >
         <button
           onClick={handleNewConversation}
