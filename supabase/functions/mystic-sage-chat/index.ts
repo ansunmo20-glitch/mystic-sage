@@ -14,7 +14,8 @@ interface Message {
 
 interface RequestBody {
   messages: Message[];
-  userId: string;
+  userId?: string;
+  isDiarySummary?: boolean;
 }
 
 interface PineconeMatch {
@@ -397,12 +398,52 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { messages, userId }: RequestBody = await req.json();
+    const { messages, userId, isDiarySummary }: RequestBody = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(
         JSON.stringify({ error: "Invalid request: messages array required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (isDiarySummary) {
+      const DIARY_SYSTEM_PROMPT = `You are summarizing a counseling session into a diary entry.
+Return ONLY valid JSON with these exact fields:
+{
+  "summary": "string (first-person, starting with 'Today I...', 2-3 sentences)",
+  "emotionBefore": "string (1-3 words, e.g. 'anxious', 'overwhelmed')",
+  "emotionAfter": "string (1-3 words, e.g. 'calmer', 'lighter')",
+  "sageMessage": "string (the most meaningful insight from the session, reframed as modern everyday language — no scripture quotes)"
+}
+Do not include any other text, markdown, or explanation.`;
+
+      const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1024,
+          system: DIARY_SYSTEM_PROMPT,
+          messages: messages,
+        }),
+      });
+
+      if (!diaryResponse.ok) {
+        const err = await diaryResponse.text();
+        throw new Error(`Diary API error: ${diaryResponse.status} — ${err}`);
+      }
+
+      const diaryData = await diaryResponse.json();
+      const diaryText = diaryData.content[0].text;
+
+      return new Response(
+        JSON.stringify({ message: diaryText }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

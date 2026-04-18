@@ -17,6 +17,14 @@ import {
   updateSessionTitle,
   deleteSession
 } from '../lib/sessionStorage';
+import {
+  saveDiaryDraft,
+  loadDiaryDraft,
+  clearDiaryDraft,
+  saveDiaryEntry,
+  countTurns,
+} from '../lib/diaryStorage';
+import { generateDiaryEntry } from '../lib/generateDiaryEntry';
 
 interface Message {
   id: string;
@@ -188,6 +196,16 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       saveSession(finalSession);
       setAllSessions(getAllSessions());
 
+      const draftMessages = finalMessages.map(m => ({ role: m.role, content: m.content }));
+      const turns = countTurns(draftMessages);
+      if (turns > 0 && turns % 3 === 0) {
+        saveDiaryDraft({
+          sessionId: finalSession.id,
+          date: new Date().toISOString().slice(0, 10),
+          messages: draftMessages,
+        });
+      }
+
       if (response.tokenUsage) {
         setTokensUsed((prev) => prev + response.tokenUsage.total);
       }
@@ -209,6 +227,18 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     setHasStarted(false);
     setAllSessions(getAllSessions());
     setSidebarOpen(false);
+
+    const draft = loadDiaryDraft();
+    if (draft && countTurns(draft.messages) >= 3) {
+      generateDiaryEntry(draft).then(entry => {
+        saveDiaryEntry(entry);
+        clearDiaryDraft();
+      }).catch(() => {
+        clearDiaryDraft();
+      });
+    } else if (draft) {
+      clearDiaryDraft();
+    }
   };
 
   const handleSelectSession = (sessionId: string) => {

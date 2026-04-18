@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DiaryDetail } from './DiaryDetail';
-import { SAMPLE_DIARY_ENTRIES } from '../lib/diaryData';
+import { loadDiaryEntries } from '../lib/diaryStorage';
 import type { DiaryEntry } from '../lib/diaryTypes';
 
 const MONTHS = [
@@ -31,7 +31,7 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
 
   const today = todayStr();
-  const entries = SAMPLE_DIARY_ENTRIES;
+  const entries = loadDiaryEntries();
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
