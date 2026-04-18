@@ -54,6 +54,27 @@ export function saveDiaryEntry(entry: DiaryEntry): void {
   }
 }
 
+export function updateDiaryEntry(updated: DiaryEntry): void {
+  try {
+    const entries = loadDiaryEntries();
+    const idx = entries.findIndex(e => e.id === updated.id);
+    if (idx >= 0) {
+      entries[idx] = updated;
+      localStorage.setItem(DIARY_ENTRIES_KEY, JSON.stringify(entries));
+    }
+  } catch {
+  }
+}
+
+export function deleteDiaryEntry(id: string): void {
+  try {
+    const entries = loadDiaryEntries();
+    const filtered = entries.filter(e => e.id !== id);
+    localStorage.setItem(DIARY_ENTRIES_KEY, JSON.stringify(filtered));
+  } catch {
+  }
+}
+
 export function countTurns(messages: { role: string }[]): number {
   let turns = 0;
   for (let i = 0; i < messages.length - 1; i++) {
