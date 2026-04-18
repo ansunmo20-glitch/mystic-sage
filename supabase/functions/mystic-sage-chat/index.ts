@@ -516,117 +516,100 @@ Do not include any other text, markdown, or explanation.`;
       throw new Error(`API error: ${anthropicResponse.status}`);
     }
 
-    const encoder = new TextEncoder();
+    const reader = anthropicResponse.body!.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = "";
     let fullText = "";
     let inputTokens = 0;
     let outputTokens = 0;
+    const textChunks: string[] = [];
 
-    const stream = new ReadableStream({
-      async start(controller) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split("\n");
+      sseBuffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === "[DONE]") continue;
         try {
-          const reader = anthropicResponse.body!.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6).trim();
-                if (data === "[DONE]") continue;
-                try {
-                  const parsed = JSON.parse(data);
-
-                  if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-                    const chunk = parsed.delta.text;
-                    fullText += chunk;
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", text: chunk })}\n\n`));
-                  } else if (parsed.type === "message_delta" && parsed.usage) {
-                    outputTokens = parsed.usage.output_tokens || 0;
-                  } else if (parsed.type === "message_start" && parsed.message?.usage) {
-                    inputTokens = parsed.message.usage.input_tokens || 0;
-                  } else if (parsed.type === "message_stop") {
-                    const totalTokens = inputTokens + outputTokens;
-
-                    EdgeRuntime.waitUntil((async () => {
-                      try {
-                        const { data: sessionData, error: fetchError } = await supabase
-                          .from('user_sessions')
-                          .select('tokens_used, tokens_input, tokens_output')
-                          .eq('user_id', userId)
-                          .maybeSingle();
-
-                        if (!fetchError && sessionData) {
-                          await supabase
-                            .from('user_sessions')
-                            .update({
-                              tokens_used: (sessionData.tokens_used || 0) + totalTokens,
-                              tokens_input: (sessionData.tokens_input || 0) + inputTokens,
-                              tokens_output: (sessionData.tokens_output || 0) + outputTokens,
-                            })
-                            .eq('user_id', userId);
-                        }
-                      } catch (dbError) {
-                        console.error('Database error:', dbError);
-                      }
-                    })());
-
-                    let parsedResponse;
-                    try {
-                      let jsonText = fullText.trim();
-                      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
-                      if (jsonMatch) {
-                        jsonText = jsonMatch[1].trim();
-                      } else {
-                        const codeMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
-                        if (codeMatch) jsonText = codeMatch[1].trim();
-                      }
-                      parsedResponse = JSON.parse(jsonText);
-                      if (!parsedResponse.message || !Array.isArray(parsedResponse.options) || parsedResponse.options.length !== 3) {
-                        throw new Error("Invalid response format");
-                      }
-                    } catch {
-                      parsedResponse = {
-                        message: fullText,
-                        options: ["Tell me more", "I understand", "What should I do?"]
-                      };
-                    }
-
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-                      type: "done",
-                      message: parsedResponse.message,
-                      options: parsedResponse.options,
-                      tokenUsage: { input: inputTokens, output: outputTokens, total: totalTokens },
-                    })}\n\n`));
-                  }
-                } catch {
-                }
-              }
-            }
+          const parsed = JSON.parse(data);
+          if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+            const chunk = parsed.delta.text as string;
+            fullText += chunk;
+            textChunks.push(chunk);
+          } else if (parsed.type === "message_delta" && parsed.usage) {
+            outputTokens = parsed.usage.output_tokens || 0;
+          } else if (parsed.type === "message_start" && parsed.message?.usage) {
+            inputTokens = parsed.message.usage.input_tokens || 0;
           }
-        } catch (err) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: String(err) })}\n\n`));
-        } finally {
-          controller.close();
+        } catch {
         }
       }
-    });
+    }
 
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    const totalTokens = inputTokens + outputTokens;
+
+    EdgeRuntime.waitUntil((async () => {
+      try {
+        const { data: sessionData, error: fetchError } = await supabase
+          .from('user_sessions')
+          .select('tokens_used, tokens_input, tokens_output')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (!fetchError && sessionData) {
+          await supabase
+            .from('user_sessions')
+            .update({
+              tokens_used: (sessionData.tokens_used || 0) + totalTokens,
+              tokens_input: (sessionData.tokens_input || 0) + inputTokens,
+              tokens_output: (sessionData.tokens_output || 0) + outputTokens,
+            })
+            .eq('user_id', userId);
+        }
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+      }
+    })());
+
+    let parsedResponse;
+    try {
+      let jsonText = fullText.trim();
+      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1].trim();
+      } else {
+        const codeMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeMatch) jsonText = codeMatch[1].trim();
+      }
+      parsedResponse = JSON.parse(jsonText);
+      if (!parsedResponse.message || !Array.isArray(parsedResponse.options) || parsedResponse.options.length !== 3) {
+        throw new Error("Invalid response format");
+      }
+    } catch {
+      parsedResponse = {
+        message: fullText,
+        options: ["Tell me more", "I understand", "What should I do?"]
+      };
+    }
+
+    return new Response(
+      JSON.stringify({
+        message: parsedResponse.message,
+        options: parsedResponse.options,
+        chunks: textChunks,
+        tokenUsage: { input: inputTokens, output: outputTokens, total: totalTokens },
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     console.error("Error:", error);
     return new Response(

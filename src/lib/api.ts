@@ -33,41 +33,25 @@ export async function sendMessage(messages: Message[], userId: string, callbacks
     throw new Error(error.error || 'Failed to send message');
   }
 
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('text/event-stream')) {
-    const data = await response.json();
-    callbacks.onDone(data.message, data.options || [], data.tokenUsage || { input: 0, output: 0, total: 0 });
+  const data = await response.json();
+
+  if (data.error) {
+    callbacks.onError(data.error);
     return;
   }
 
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  const chunks: string[] = data.chunks || [];
+  const tokenUsage = data.tokenUsage || { input: 0, output: 0, total: 0 };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6).trim();
-        if (!data) continue;
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.type === 'chunk') {
-            callbacks.onChunk(parsed.text);
-          } else if (parsed.type === 'done') {
-            callbacks.onDone(parsed.message, parsed.options || [], parsed.tokenUsage || { input: 0, output: 0, total: 0 });
-          } else if (parsed.type === 'error') {
-            callbacks.onError(parsed.error);
-          }
-        } catch {
-        }
-      }
-    }
+  if (chunks.length === 0) {
+    callbacks.onDone(data.message, data.options || [], tokenUsage);
+    return;
   }
+
+  for (const chunk of chunks) {
+    callbacks.onChunk(chunk);
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+
+  callbacks.onDone(data.message, data.options || [], tokenUsage);
 }
