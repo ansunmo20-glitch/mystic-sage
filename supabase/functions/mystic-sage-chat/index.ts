@@ -465,7 +465,8 @@ Required format:
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
 
     let ragContextBlock = "";
-    if (openaiApiKey && pineconeApiKey && lastUserMessage) {
+    const isAdvicePhase = messages.length >= 8;
+    if (openaiApiKey && pineconeApiKey && lastUserMessage && isAdvicePhase) {
       try {
         const embedding = await generateEmbedding(lastUserMessage.content, openaiApiKey);
         const matches = await queryPinecone(embedding, pineconeApiKey, 5);
