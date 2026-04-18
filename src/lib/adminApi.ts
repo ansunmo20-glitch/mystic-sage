@@ -60,6 +60,14 @@ export async function toggleSuspended(sessionId: string, suspended: boolean): Pr
   if (error) throw error;
 }
 
+export async function setSubscriptionStatus(sessionId: string, status: 'free' | 'paid'): Promise<void> {
+  const { error } = await supabase
+    .from('user_sessions')
+    .update({ subscription_status: status })
+    .eq('id', sessionId);
+  if (error) throw error;
+}
+
 export async function fetchSettings(): Promise<Record<string, string>> {
   const raw = localStorage.getItem(SETTINGS_KEY);
   if (!raw) return {};
