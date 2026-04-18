@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Flower2, Coffee, Mail, LogOut, Settings as SettingsIcon, Home } from 'lucide-react';
+import { Send, Flower2, LogOut, Settings as SettingsIcon, Home, BookOpen } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
 import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
@@ -26,7 +26,11 @@ interface Message {
 }
 
 
-export function Chat() {
+interface ChatProps {
+  onNavigateDiary: () => void;
+}
+
+export function Chat({ onNavigateDiary }: ChatProps) {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
@@ -285,7 +289,7 @@ export function Chat() {
   const showLimitScreen = !canUseSession && hasStarted;
 
   return (
-    <div className="min-h-screen bg-[#FAF6EF] flex flex-col">
+    <div className="min-h-screen bg-[#FAF6EF] flex flex-col pb-[52px]">
       <SessionSidebar
         sessions={allSessions}
         activeSessionId={currentSession?.id || null}
@@ -356,7 +360,7 @@ export function Chat() {
                 <Flower2 className="w-8 h-8 text-[#C4A96E]" strokeWidth={1.5} />
               </div>
               <div className="space-y-4">
-                <h2 className="font-serif text-2xl text-[#2C2C2C]">
+                <h2 className="font-serif text-xl text-[#2C2C2C] whitespace-nowrap">
                   What brought you here today?
                 </h2>
               </div>
@@ -422,8 +426,8 @@ export function Chat() {
       </main>
 
       {!showLimitScreen && (
-        <footer className="bg-white border-t border-[#E8DED0] px-6 py-6 shadow-warm-top">
-          <div className="max-w-4xl mx-auto space-y-4">
+        <footer className="bg-white border-t border-[#E8DED0] px-6 py-4 shadow-warm-top">
+          <div className="max-w-4xl mx-auto">
             <div className="flex gap-3 items-end">
               <textarea
                 ref={textareaRef}
@@ -443,35 +447,31 @@ export function Chat() {
                 <Send className="w-5 h-5" />
               </button>
             </div>
-
-            <div className="flex justify-center items-center gap-4 pt-2">
-              <a
-                href="https://buymeacoffee.com/mysticsage"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors rounded-full hover:bg-[#FAF6EF]"
-              >
-                <Coffee className="w-4 h-4" />
-                <span>Support Mystic Sage</span>
-              </a>
-              <a
-                href="mailto:mysticsage.hello@gmail.com"
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors rounded-full hover:bg-[#FAF6EF]"
-              >
-                <Mail className="w-4 h-4" />
-                <span>Contact</span>
-              </a>
-              <button
-                onClick={handleDevReset}
-                className="px-2 py-1 text-xs text-[#9B9B9B] hover:text-[#C4A96E] transition-colors opacity-30 hover:opacity-100"
-                title="Dev: Reset session count"
-              >
-                dev
-              </button>
-            </div>
           </div>
         </footer>
       )}
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 bg-[#faf6ef] border-t border-[#e2d8c8] flex items-center"
+        style={{ height: '52px' }}
+      >
+        <button
+          onClick={handleNewConversation}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors"
+          style={{ color: hasStarted || messages.length > 0 ? '#a89070' : '#c4a96e' }}
+        >
+          <Home className="w-5 h-5" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium tracking-wide">Home</span>
+        </button>
+        <button
+          onClick={onNavigateDiary}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors"
+          style={{ color: '#a89070' }}
+        >
+          <BookOpen className="w-5 h-5" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium tracking-wide">Diary</span>
+        </button>
+      </nav>
 
       <Modal
         isOpen={modalOpen}
@@ -487,6 +487,7 @@ export function Chat() {
           onSignOut={handleSignOut}
           onExportConversations={exportConversations}
           onDeleteAccount={handleDeleteAccount}
+          onDevReset={handleDevReset}
         />
       )}
     </div>

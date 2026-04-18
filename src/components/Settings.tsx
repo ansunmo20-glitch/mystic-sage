@@ -1,4 +1,4 @@
-import { X, Settings as SettingsIcon } from 'lucide-react';
+import { X, Settings as SettingsIcon, Coffee, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from './Modal';
 
@@ -8,6 +8,7 @@ interface SettingsProps {
   onSignOut: () => void;
   onExportConversations: () => void;
   onDeleteAccount: () => void;
+  onDevReset?: () => void;
 }
 
 export function Settings({
@@ -15,7 +16,8 @@ export function Settings({
   onClose,
   onSignOut,
   onExportConversations,
-  onDeleteAccount
+  onDeleteAccount,
+  onDevReset
 }: SettingsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -90,6 +92,34 @@ export function Settings({
             </section>
 
             <section className="bg-white rounded-lg border border-[#E8DED0] p-6 shadow-sm">
+              <h2 className="text-lg font-medium text-[#2C2C2C] mb-4">Support</h2>
+              <div className="space-y-2">
+                <a
+                  href="https://buymeacoffee.com/mysticsage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#F5EFE7] transition-colors border border-[#E8DED0] text-[#6B6B6B] hover:text-[#C4A96E]"
+                >
+                  <Coffee className="w-4 h-4 flex-shrink-0" />
+                  <div>
+                    <div className="font-medium text-[#2C2C2C]">Support Mystic Sage</div>
+                    <div className="text-sm text-[#9B9B9B]">Buy me a coffee</div>
+                  </div>
+                </a>
+                <a
+                  href="mailto:mysticsage.hello@gmail.com"
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#F5EFE7] transition-colors border border-[#E8DED0] text-[#6B6B6B] hover:text-[#C4A96E]"
+                >
+                  <Mail className="w-4 h-4 flex-shrink-0" />
+                  <div>
+                    <div className="font-medium text-[#2C2C2C]">Contact</div>
+                    <div className="text-sm text-[#9B9B9B]">mysticsage.hello@gmail.com</div>
+                  </div>
+                </a>
+              </div>
+            </section>
+
+            <section className="bg-white rounded-lg border border-[#E8DED0] p-6 shadow-sm">
               <h2 className="text-lg font-medium text-[#2C2C2C] mb-4">App Info</h2>
               <div className="space-y-2 text-[#6B6B6B]">
                 <div>
@@ -97,6 +127,16 @@ export function Settings({
                 </div>
                 <div className="text-sm">Version 1.0.0 (Beta)</div>
                 <div className="text-sm italic">A quiet space to think out loud</div>
+                {onDevReset && (
+                  <div className="pt-2">
+                    <button
+                      onClick={onDevReset}
+                      className="text-xs text-[#9B9B9B] hover:text-[#C4A96E] transition-colors opacity-40 hover:opacity-100"
+                    >
+                      dev: reset session
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 

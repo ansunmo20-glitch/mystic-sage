@@ -6,6 +6,7 @@ import Login from './components/Login';
 import { TermsOfService } from './components/TermsOfService';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { Admin } from './components/Admin';
+import { Diary } from './components/Diary';
 import { hasSeenWelcome, markWelcomeSeen } from './lib/storage';
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -14,7 +15,7 @@ if (!clerkPubKey) {
   throw new Error('Missing Clerk Publishable Key');
 }
 
-type Page = 'main' | 'terms' | 'privacy' | 'admin';
+type Page = 'main' | 'terms' | 'privacy' | 'admin' | 'diary';
 
 function AppContent() {
   const [showWelcome, setShowWelcome] = useState(true);
@@ -34,6 +35,8 @@ function AppContent() {
       setCurrentPage('privacy');
     } else if (path === '/admin') {
       setCurrentPage('admin');
+    } else if (path === '/diary') {
+      setCurrentPage('diary');
     }
   }, []);
 
@@ -46,6 +49,8 @@ function AppContent() {
         setCurrentPage('privacy');
       } else if (path === '/admin') {
         setCurrentPage('admin');
+      } else if (path === '/diary') {
+        setCurrentPage('diary');
       } else {
         setCurrentPage('main');
       }
@@ -75,6 +80,11 @@ function AppContent() {
     setCurrentPage('main');
   };
 
+  const navigateToDiary = () => {
+    window.history.pushState({}, '', '/diary');
+    setCurrentPage('diary');
+  };
+
   if (!isReady) {
     return null;
   }
@@ -91,13 +101,21 @@ function AppContent() {
     return <PrivacyPolicy onBack={navigateToMain} />;
   }
 
+  if (currentPage === 'diary') {
+    return (
+      <SignedIn>
+        <Diary onNavigateHome={navigateToMain} />
+      </SignedIn>
+    );
+  }
+
   return (
     <>
       <SignedOut>
         <Login />
       </SignedOut>
       <SignedIn>
-        {showWelcome ? <Welcome onBegin={handleBegin} /> : <Chat />}
+        {showWelcome ? <Welcome onBegin={handleBegin} /> : <Chat onNavigateDiary={navigateToDiary} />}
       </SignedIn>
     </>
   );
