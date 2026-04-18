@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Flower2, Coffee, Mail, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { Send, Flower2, Coffee, Mail, LogOut, Settings as SettingsIcon, Home } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { sendMessage } from '../lib/api';
 import { checkAndUpdateSession, getCurrentSessionUsage } from '../lib/sessions';
@@ -300,6 +300,16 @@ export function Chat() {
           <div className="flex items-center gap-3">
             <Flower2 className="w-6 h-6 text-[#C4A96E]" strokeWidth={1.5} />
             <h1 className="font-serif text-2xl text-[#2C2C2C]">Mystic Sage</h1>
+            {hasStarted && (
+              <button
+                onClick={handleNewConversation}
+                className="ml-1 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#9B9B9B] hover:text-[#C4A96E] hover:bg-[#F5EFE7] rounded-lg transition-colors border border-transparent hover:border-[#E8DED0]"
+                title="Return to home"
+              >
+                <Home className="w-3.5 h-3.5" />
+                Home
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -317,15 +327,6 @@ export function Chat() {
                 {Math.round((tokensUsed / 1000) * 10) / 10}k / {maxTokens / 1000}k tokens
               </p>
             </div>
-
-            {hasStarted && (
-              <button
-                onClick={handleNewConversation}
-                className="text-sm text-[#C4A96E] hover:text-[#B39A5E] transition-colors"
-              >
-                New
-              </button>
-            )}
 
             <button
               onClick={() => setSettingsOpen(true)}
