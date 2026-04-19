@@ -26,7 +26,85 @@ interface PineconeMatch {
     [key: string]: unknown;
   };
 }
+async function logToGoogleSheets(data: {
+  session_id: string;
+  user_id: string;
+  turn_number: number;
+  input_tokens: number;
+  output_tokens: number;
+  limit_reached: boolean;
+}) {
+  try {
+    const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
+    const key = Deno.env.get('GOOGLE_PRIVATE_KEY')!.replace(/\\n/g, '\n');
+    const sheetId = Deno.env.get('GOOGLE_SHEET_ID')!;
 
+    // JWT 생성
+    const now = Math.floor(Date.now() / 1000);
+    const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const payload = btoa(JSON.stringify({
+      iss: email,
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now,
+    }));
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'pkcs8',
+      str2ab(atob(key.replace(/-----[^-]+-----/g, '').replace(/\s/g, ''))),
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sig = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      cryptoKey,
+      new TextEncoder().encode(`${header}.${payload}`)
+    );
+    const jwt = `${header}.${payload}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+
+    // 토큰 교환
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+    });
+    const { access_token } = await tokenRes.json();
+
+    // Sheets에 행 추가
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A:G:append?valueInputOption=RAW`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: [[
+            new Date().toISOString(),
+            data.session_id,
+            data.user_id,
+            data.turn_number,
+            data.input_tokens,
+            data.output_tokens,
+            data.limit_reached,
+          ]],
+        }),
+      }
+    );
+  } catch (e) {
+    console.error('Sheets logging failed (non-fatal):', e);
+  }
+}
+
+function str2ab(str: string) {
+  const buf = new ArrayBuffer(str.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < str.length; i++) view[i] = str.charCodeAt(i);
+  return buf;
+}
 const PINECONE_HOST = "https://mystic-sage-qmhcmir.svc.aped-4627-b74a.pinecone.io";
 
 // WARNING: TONE RULE: Casual warm friend style ONLY. No poetic/literary language. See history — fixed 3 times.
@@ -529,7 +607,15 @@ Required format:
     const inputTokens = anthropicData.usage?.input_tokens || 0;
     const outputTokens = anthropicData.usage?.output_tokens || 0;
     const totalTokens = inputTokens + outputTokens;
-
+// 분석 로깅 (non-blocking)
+logToGoogleSheets({
+  session_id: userId ?? 'anonymous',
+  user_id: userId ?? 'anonymous',
+  turn_number: messages.length,
+  input_tokens: inputTokens,
+  output_tokens: outputTokens,
+  limit_reached: false,
+});
     EdgeRuntime.waitUntil((async () => {
       try {
         const { data: sessionData, error: fetchError } = await supabase
