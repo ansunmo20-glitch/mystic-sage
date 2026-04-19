@@ -26,6 +26,7 @@ import {
   countTurns,
 } from '../lib/diaryStorage';
 import { generateDiaryEntry } from '../lib/generateDiaryEntry';
+import { CrisisBanner, detectCrisisKeywords } from './CrisisBanner';
 
 interface Message {
   id: string;
@@ -58,6 +59,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const [modalMessage, setModalMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showCrisisBanner, setShowCrisisBanner] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -169,6 +171,10 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         setModalOpen(true);
         return;
       }
+    }
+
+    if (detectCrisisKeywords(messageText)) {
+      setShowCrisisBanner(true);
     }
 
     setInput('');
@@ -378,6 +384,10 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
+      {showCrisisBanner && (
+        <CrisisBanner onClose={() => setShowCrisisBanner(false)} />
+      )}
+
       <header className="bg-white border-b border-[#E8DED0] px-6 py-4 shadow-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

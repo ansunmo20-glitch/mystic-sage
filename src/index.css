@@ -43,4 +43,19 @@
       transform: translateY(0);
     }
   }
+
+  .crisis-banner {
+    animation: slideDown 0.35s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
