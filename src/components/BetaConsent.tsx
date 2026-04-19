@@ -5,6 +5,49 @@ interface BetaConsentProps {
   onAccept: () => void;
 }
 
+function CheckboxRow({
+  id,
+  checked,
+  onChange,
+  children,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className="flex items-start gap-3 text-left cursor-pointer group select-none"
+    >
+      <div className="relative mt-0.5 flex-shrink-0">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="sr-only"
+        />
+        <div
+          className={`w-5 h-5 rounded border-2 transition-all flex items-center justify-center ${
+            checked
+              ? 'bg-[#C4A96E] border-[#C4A96E]'
+              : 'bg-white border-[#C4A96E]/50 group-hover:border-[#C4A96E]'
+          }`}
+        >
+          {checked && (
+            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+      </div>
+      <span className="text-[#3C3C3C] text-sm leading-relaxed">{children}</span>
+    </label>
+  );
+}
+
 export function BetaConsent({ onAccept }: BetaConsentProps) {
   const [termsChecked, setTermsChecked] = useState(false);
   const [betaChecked, setBetaChecked] = useState(false);
@@ -37,83 +80,35 @@ export function BetaConsent({ onAccept }: BetaConsentProps) {
         </div>
 
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 space-y-4 shadow-sm border border-[#E8DED0]">
-          <label className="flex items-start gap-3 text-left cursor-pointer group">
-            <div className="relative mt-0.5 flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={termsChecked}
-                onChange={(e) => setTermsChecked(e.target.checked)}
-                className="sr-only"
-              />
-              <div
-                onClick={() => setTermsChecked(!termsChecked)}
-                className={`w-5 h-5 rounded border-2 transition-all flex items-center justify-center ${
-                  termsChecked
-                    ? 'bg-[#C4A96E] border-[#C4A96E]'
-                    : 'bg-white border-[#C4A96E]/50 group-hover:border-[#C4A96E]'
-                }`}
-              >
-                {termsChecked && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
-            </div>
-            <span className="text-[#3C3C3C] text-sm leading-relaxed" onClick={() => setTermsChecked(!termsChecked)}>
-              I agree to the{' '}
-              <a
-                href="/terms"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#C4A96E] underline hover:text-[#B39A5E] transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Terms of Service
-              </a>{' '}
-              and{' '}
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#C4A96E] underline hover:text-[#B39A5E] transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Privacy Policy
-              </a>
-              .
-            </span>
-          </label>
+          <CheckboxRow id="terms-checkbox" checked={termsChecked} onChange={setTermsChecked}>
+            I agree to the{' '}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#C4A96E] underline hover:text-[#B39A5E] transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Terms of Service
+            </a>{' '}
+            and{' '}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#C4A96E] underline hover:text-[#B39A5E] transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Privacy Policy
+            </a>
+            .
+          </CheckboxRow>
 
           <div className="h-px bg-[#E8DED0]" />
 
-          <label className="flex items-start gap-3 text-left cursor-pointer group">
-            <div className="relative mt-0.5 flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={betaChecked}
-                onChange={(e) => setBetaChecked(e.target.checked)}
-                className="sr-only"
-              />
-              <div
-                onClick={() => setBetaChecked(!betaChecked)}
-                className={`w-5 h-5 rounded border-2 transition-all flex items-center justify-center ${
-                  betaChecked
-                    ? 'bg-[#C4A96E] border-[#C4A96E]'
-                    : 'bg-white border-[#C4A96E]/50 group-hover:border-[#C4A96E]'
-                }`}
-              >
-                {betaChecked && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
-            </div>
-            <span className="text-[#3C3C3C] text-sm leading-relaxed" onClick={() => setBetaChecked(!betaChecked)}>
-              I understand this is a beta service and features may change.
-            </span>
-          </label>
+          <CheckboxRow id="beta-checkbox" checked={betaChecked} onChange={setBetaChecked}>
+            I understand this is a beta service and features may change.
+          </CheckboxRow>
         </div>
 
         <button
