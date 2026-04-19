@@ -7,6 +7,7 @@ import { TermsOfService } from './components/TermsOfService';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { Admin } from './components/Admin';
 import { Diary } from './components/Diary';
+import { BetaConsent } from './components/BetaConsent';
 import { hasSeenWelcome, markWelcomeSeen } from './lib/storage';
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -19,12 +20,17 @@ type Page = 'main' | 'terms' | 'privacy' | 'admin' | 'diary';
 
 function AppContent() {
   const [showWelcome, setShowWelcome] = useState(true);
+  const [showBetaConsent, setShowBetaConsent] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>('main');
 
   useEffect(() => {
     if (hasSeenWelcome()) {
       setShowWelcome(false);
+    }
+    const betaAccepted = localStorage.getItem('beta_consent_accepted') === 'true';
+    if (!betaAccepted) {
+      setShowBetaConsent(true);
     }
     setIsReady(true);
 
@@ -115,7 +121,13 @@ function AppContent() {
         <Login />
       </SignedOut>
       <SignedIn>
-        {showWelcome ? <Welcome onBegin={handleBegin} /> : <Chat onNavigateDiary={navigateToDiary} />}
+        {showBetaConsent ? (
+          <BetaConsent onAccept={() => setShowBetaConsent(false)} />
+        ) : showWelcome ? (
+          <Welcome onBegin={handleBegin} />
+        ) : (
+          <Chat onNavigateDiary={navigateToDiary} />
+        )}
       </SignedIn>
     </>
   );
