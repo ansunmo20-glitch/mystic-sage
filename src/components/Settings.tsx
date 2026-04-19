@@ -8,7 +8,6 @@ interface SettingsProps {
   onSignOut: () => void;
   onExportConversations: () => void;
   onDeleteAccount: () => void;
-  onDevReset?: () => void;
 }
 
 export function Settings({
@@ -17,7 +16,6 @@ export function Settings({
   onSignOut,
   onExportConversations,
   onDeleteAccount,
-  onDevReset
 }: SettingsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -127,16 +125,6 @@ export function Settings({
                 </div>
                 <div className="text-sm">Version 1.0.0 (Beta)</div>
                 <div className="text-sm italic">A quiet space to think out loud</div>
-                {onDevReset && (
-                  <div className="pt-2">
-                    <button
-                      onClick={onDevReset}
-                      className="text-xs text-[#9B9B9B] hover:text-[#C4A96E] transition-colors opacity-40 hover:opacity-100"
-                    >
-                      dev: reset session
-                    </button>
-                  </div>
-                )}
               </div>
             </section>
 

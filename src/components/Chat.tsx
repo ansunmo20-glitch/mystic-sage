@@ -7,7 +7,6 @@ import { checkAndUpdateSession, getCurrentSessionUsage, ensureUserTokens } from 
 import { Modal } from './Modal';
 import { SessionSidebar } from './SessionSidebar';
 import { Settings } from './Settings';
-import { resetSessionForUser } from '../lib/devUtils';
 import { exportConversations } from '../lib/exportConversations';
 import {
   ChatSession,
@@ -97,11 +96,6 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       setTokensUsed(resolvedTokensUsed);
       setMaxTokens(resolvedMaxTokens);
       setCanUseSession(resolvedTokensUsed < resolvedMaxTokens);
-      console.log(
-        '[Chat] loadSessionUsage — tokensUsed:', resolvedTokensUsed,
-        'maxTokens:', resolvedMaxTokens,
-        'canUse:', resolvedTokensUsed < resolvedMaxTokens
-      );
     } catch (error) {
       console.error('Error loading session usage:', error);
     }
@@ -125,11 +119,6 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     if (!hasStarted) {
       const currentTokensUsed = tokensUsed ?? 0;
       const currentMaxTokens = maxTokens ?? 10000;
-      console.log(
-        '[Chat] handleSend pre-check — tokensUsed:', currentTokensUsed,
-        'maxTokens:', currentMaxTokens,
-        'canUseSession:', canUseSession
-      );
 
       if (currentTokensUsed >= currentMaxTokens) {
         setModalTitle('Session Limit Reached');
@@ -149,12 +138,6 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         setMaxTokens(resultMaxTokens);
         setTokensUsed(resultTokensUsed);
         setCanUseSession(result.canUseSession);
-
-        console.log(
-          '[Chat] checkAndUpdateSession result — canUse:', result.canUseSession,
-          'tokensUsed:', resultTokensUsed,
-          'maxTokens:', resultMaxTokens
-        );
 
         if (!result.canUseSession) {
           setModalTitle('Session Limit Reached');
@@ -344,26 +327,6 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    }
-  };
-
-  const handleDevReset = async () => {
-    if (!user) return;
-
-    try {
-      await resetSessionForUser(user.id);
-      setSessionsUsed(0);
-      setCanUseSession(true);
-      setTokensUsed(0);
-      setModalTitle('Dev Reset Complete');
-      setModalMessage('Session and token counts have been reset for testing.');
-      setModalOpen(true);
-      await loadSessionUsage();
-    } catch (error) {
-      console.error('Error resetting session:', error);
-      setModalTitle('Error');
-      setModalMessage('Failed to reset session.');
-      setModalOpen(true);
     }
   };
 
@@ -567,7 +530,6 @@ export function Chat({ onNavigateDiary }: ChatProps) {
           onSignOut={handleSignOut}
           onExportConversations={exportConversations}
           onDeleteAccount={handleDeleteAccount}
-          onDevReset={handleDevReset}
         />
       )}
     </div>
