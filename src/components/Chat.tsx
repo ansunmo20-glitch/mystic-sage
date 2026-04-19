@@ -200,6 +200,15 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }));
 
     const callbacks: StreamCallbacks = {
+      onChunk: (text) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantPlaceholderId
+              ? { ...m, content: m.content + text }
+              : m
+          )
+        );
+      },
       onDone: (message, _options, tokenUsage) => {
         const timestamp = new Date().toISOString();
         const finalMessages = newMessages.concat([{
@@ -458,7 +467,12 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                     <div className="w-2 h-2 bg-[#C4A96E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {message.content}
+                    {loading && message.role === 'assistant' && message.content !== '' && (
+                      <span className="inline-block w-0.5 h-4 bg-[#C4A96E] ml-0.5 animate-pulse align-middle" />
+                    )}
+                  </p>
                 )}
               </div>
             </div>

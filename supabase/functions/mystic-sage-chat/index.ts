@@ -26,6 +26,7 @@ interface PineconeMatch {
     [key: string]: unknown;
   };
 }
+
 async function logToGoogleSheets(data: {
   session_id: string;
   user_id: string;
@@ -39,7 +40,6 @@ async function logToGoogleSheets(data: {
     const key = Deno.env.get('GOOGLE_PRIVATE_KEY')!.replace(/\\n/g, '\n');
     const sheetId = Deno.env.get('GOOGLE_SHEET_ID')!;
 
-    // JWT 생성
     const now = Math.floor(Date.now() / 1000);
     const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
     const payload = btoa(JSON.stringify({
@@ -64,7 +64,6 @@ async function logToGoogleSheets(data: {
     );
     const jwt = `${header}.${payload}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
 
-    // 토큰 교환
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -72,7 +71,6 @@ async function logToGoogleSheets(data: {
     });
     const { access_token } = await tokenRes.json();
 
-    // Sheets에 행 추가
     await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A:G:append?valueInputOption=RAW`,
       {
@@ -105,6 +103,7 @@ function str2ab(str: string) {
   for (let i = 0; i < str.length; i++) view[i] = str.charCodeAt(i);
   return buf;
 }
+
 const PINECONE_HOST = "https://mystic-sage-qmhcmir.svc.aped-4627-b74a.pinecone.io";
 
 // WARNING: TONE RULE: Casual warm friend style ONLY. No poetic/literary language. See history — fixed 3 times.
@@ -456,6 +455,10 @@ ${chunks.join("\n\n")}
 ━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
 
+function sseEvent(event: string, data: string): string {
+  return `event: ${event}\ndata: ${data}\n\n`;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -495,8 +498,6 @@ Required format:
   "sageMessage": "the most meaningful insight from the session in modern everyday language, not a scripture quote"
 }`;
 
-      console.log("Diary summary request, message count:", messages.length);
-
       const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -512,19 +513,13 @@ Required format:
         }),
       });
 
-      console.log("Diary API response status:", diaryResponse.status);
-
       if (!diaryResponse.ok) {
         const err = await diaryResponse.text();
-        console.error("Diary API error body:", err);
         throw new Error(`Diary API error: ${diaryResponse.status} — ${err}`);
       }
 
       const diaryData = await diaryResponse.json();
       const rawDiaryText = diaryData.content[0].text as string;
-
-      console.log("Diary raw response:", rawDiaryText);
-
       const cleanDiaryText = rawDiaryText.replace(/```json|```/g, '').trim();
 
       return new Response(
@@ -585,6 +580,7 @@ Required format:
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 2048,
+        stream: true,
         system: [
           {
             type: "text",
@@ -602,75 +598,141 @@ Required format:
       throw new Error(`API error: ${anthropicResponse.status}`);
     }
 
-    const anthropicData = await anthropicResponse.json();
-    const fullText = anthropicData.content[0].text as string;
-    const inputTokens = anthropicData.usage?.input_tokens || 0;
-    const outputTokens = anthropicData.usage?.output_tokens || 0;
-    const totalTokens = inputTokens + outputTokens;
-// 분석 로깅 (non-blocking)
-logToGoogleSheets({
-  session_id: userId ?? 'anonymous',
-  user_id: userId ?? 'anonymous',
-  turn_number: messages.length,
-  input_tokens: inputTokens,
-  output_tokens: outputTokens,
-  limit_reached: false,
-});
-    EdgeRuntime.waitUntil((async () => {
-      try {
-        const { data: sessionData, error: fetchError } = await supabase
-          .from('user_sessions')
-          .select('tokens_used, tokens_input, tokens_output')
-          .eq('user_id', userId)
-          .maybeSingle();
+    const sseHeaders = {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    };
 
-        if (!fetchError && sessionData) {
-          await supabase
-            .from('user_sessions')
-            .update({
-              tokens_used: (sessionData.tokens_used || 0) + totalTokens,
-              tokens_input: (sessionData.tokens_input || 0) + inputTokens,
-              tokens_output: (sessionData.tokens_output || 0) + outputTokens,
-            })
-            .eq('user_id', userId);
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let fullText = "";
+        let inputTokens = 0;
+        let outputTokens = 0;
+
+        try {
+          const reader = anthropicResponse.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const raw = line.slice(6).trim();
+              if (!raw || raw === "[DONE]") continue;
+
+              let parsed: Record<string, unknown>;
+              try {
+                parsed = JSON.parse(raw);
+              } catch {
+                continue;
+              }
+
+              const type = parsed.type as string;
+
+              if (type === "content_block_delta") {
+                const delta = parsed.delta as Record<string, unknown>;
+                if (delta?.type === "text_delta") {
+                  const chunk = delta.text as string;
+                  fullText += chunk;
+                  controller.enqueue(encoder.encode(sseEvent("chunk", JSON.stringify({ text: chunk }))));
+                }
+              } else if (type === "message_delta") {
+                const usage = (parsed.usage as Record<string, number>) ?? {};
+                outputTokens = usage.output_tokens ?? 0;
+              } else if (type === "message_start") {
+                const msg = parsed.message as Record<string, unknown>;
+                const usage = (msg?.usage as Record<string, number>) ?? {};
+                inputTokens = usage.input_tokens ?? 0;
+              }
+            }
+          }
+
+          const totalTokens = inputTokens + outputTokens;
+
+          let parsedResponse: { message: string; options: string[] };
+          try {
+            let jsonText = fullText.trim();
+            const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonMatch) {
+              jsonText = jsonMatch[1].trim();
+            } else {
+              const codeMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+              if (codeMatch) jsonText = codeMatch[1].trim();
+            }
+            const p = JSON.parse(jsonText);
+            if (!p.message || !Array.isArray(p.options) || p.options.length !== 3) {
+              throw new Error("Invalid response format");
+            }
+            parsedResponse = p;
+          } catch {
+            parsedResponse = {
+              message: fullText,
+              options: ["Tell me more", "I understand", "What should I do?"]
+            };
+          }
+
+          controller.enqueue(encoder.encode(sseEvent("done", JSON.stringify({
+            message: parsedResponse.message,
+            options: parsedResponse.options,
+            tokenUsage: { input: inputTokens, output: outputTokens, total: totalTokens },
+          }))));
+
+          EdgeRuntime.waitUntil((async () => {
+            try {
+              logToGoogleSheets({
+                session_id: userId ?? 'anonymous',
+                user_id: userId ?? 'anonymous',
+                turn_number: messages.length,
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                limit_reached: false,
+              });
+
+              const { data: sessionData, error: fetchError } = await supabase
+                .from('user_sessions')
+                .select('tokens_used, tokens_input, tokens_output')
+                .eq('user_id', userId)
+                .maybeSingle();
+
+              if (!fetchError && sessionData) {
+                await supabase
+                  .from('user_sessions')
+                  .update({
+                    tokens_used: (sessionData.tokens_used || 0) + totalTokens,
+                    tokens_input: (sessionData.tokens_input || 0) + inputTokens,
+                    tokens_output: (sessionData.tokens_output || 0) + outputTokens,
+                  })
+                  .eq('user_id', userId);
+              }
+            } catch (dbError) {
+              console.error('Database error:', dbError);
+            }
+          })());
+
+        } catch (streamError) {
+          const encoder2 = new TextEncoder();
+          controller.enqueue(encoder2.encode(sseEvent("error", JSON.stringify({
+            error: streamError instanceof Error ? streamError.message : "Stream error"
+          }))));
+        } finally {
+          controller.close();
         }
-      } catch (dbError) {
-        console.error('Database error:', dbError);
       }
-    })());
+    });
 
-    let parsedResponse;
-    try {
-      let jsonText = fullText.trim();
-      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        jsonText = jsonMatch[1].trim();
-      } else {
-        const codeMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
-        if (codeMatch) jsonText = codeMatch[1].trim();
-      }
-      parsedResponse = JSON.parse(jsonText);
-      if (!parsedResponse.message || !Array.isArray(parsedResponse.options) || parsedResponse.options.length !== 3) {
-        throw new Error("Invalid response format");
-      }
-    } catch {
-      parsedResponse = {
-        message: fullText,
-        options: ["Tell me more", "I understand", "What should I do?"]
-      };
-    }
+    return new Response(stream, { status: 200, headers: sseHeaders });
 
-    return new Response(
-      JSON.stringify({
-        message: parsedResponse.message,
-        options: parsedResponse.options,
-        tokenUsage: { input: inputTokens, output: outputTokens, total: totalTokens },
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
   } catch (error) {
     console.error("Error:", error);
     return new Response(
