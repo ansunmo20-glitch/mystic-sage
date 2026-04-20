@@ -200,14 +200,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }));
 
     const callbacks: StreamCallbacks = {
-      onChunk: (text) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantPlaceholderId
-              ? { ...m, content: m.content + text }
-              : m
-          )
-        );
+     onChunk: () => {
+        // 스트리밍 청크는 무시 — onDone에서 최종 message만 표시
       },
       onDone: (message, _options, tokenUsage) => {
         const timestamp = new Date().toISOString();
