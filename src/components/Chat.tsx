@@ -15,7 +15,8 @@ import {
   createNewSession,
   saveSession,
   updateSessionTitle,
-  deleteSession
+  deleteSession,
+  renameSession
 } from '../lib/sessionStorage';
 import {
   saveDiaryDraft,
@@ -290,6 +291,14 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }
   };
 
+  const handleRenameSession = (sessionId: string, newTitle: string) => {
+    renameSession(sessionId, newTitle);
+    setAllSessions(getAllSessions());
+    if (currentSession?.id === sessionId) {
+      setCurrentSession(prev => prev ? { ...prev, title: newTitle } : prev);
+    }
+  };
+
   const handleDeleteSession = (sessionId: string) => {
     deleteSession(sessionId);
 
@@ -347,6 +356,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         onSelectSession={handleSelectSession}
         onNewSession={handleNewConversation}
         onDeleteSession={handleDeleteSession}
+        onRenameSession={handleRenameSession}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />

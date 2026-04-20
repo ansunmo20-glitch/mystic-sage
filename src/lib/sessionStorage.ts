@@ -16,8 +16,22 @@ export interface ChatSession {
 const SESSIONS_KEY = 'mystic_sessions';
 
 export function generateTitle(firstMessage: string): string {
-  const words = firstMessage.trim().split(/\s+/);
-  return words.slice(0, 5).join(' ');
+  const trimmed = firstMessage.trim();
+  return trimmed.length > 30 ? trimmed.slice(0, 30) + '...' : trimmed;
+}
+
+export function renameSession(sessionId: string, newTitle: string): void {
+  try {
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.title = newTitle.trim() || session.title;
+      session.updatedAt = new Date().toISOString();
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    }
+  } catch (error) {
+    console.error('Error renaming session:', error);
+  }
 }
 
 export function formatSessionDate(dateString: string): string {
