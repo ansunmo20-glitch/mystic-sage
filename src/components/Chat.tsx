@@ -64,7 +64,9 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    const sessions = getAllSessions();
+    if (!user) return;
+
+    const sessions = getAllSessions(user.id);
     setAllSessions(sessions);
 
     if (sessions.length > 0) {
@@ -75,14 +77,12 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     } else {
       const newSession = createNewSession();
       setCurrentSession(newSession);
-      saveSession(newSession);
+      saveSession(newSession, user.id);
       setAllSessions([newSession]);
     }
 
-    if (user) {
-      const email = user.emailAddresses?.[0]?.emailAddress || user.id;
-      ensureUserTokens(user.id, email).then(() => loadSessionUsage());
-    }
+    const email = user.emailAddresses?.[0]?.emailAddress || user.id;
+    ensureUserTokens(user.id, email).then(() => loadSessionUsage());
   }, [user]);
 
   const loadSessionUsage = async () => {
@@ -175,7 +175,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     setMessages(newMessages);
 
     if (currentSession.messages.length === 0) {
-      updateSessionTitle(currentSession.id, messageText);
+      updateSessionTitle(currentSession.id, messageText, user.id);
     }
 
     const updatedSession = {
@@ -184,8 +184,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       updatedAt: new Date().toISOString()
     };
     setCurrentSession(updatedSession);
-    saveSession(updatedSession);
-    setAllSessions(getAllSessions());
+    saveSession(updatedSession, user.id);
+    setAllSessions(getAllSessions(user.id));
 
     const assistantPlaceholderId = crypto.randomUUID();
     setMessages([...newMessages, {
@@ -222,8 +222,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
           updatedAt: new Date().toISOString(),
         };
         setCurrentSession(finalSession);
-        saveSession(finalSession);
-        setAllSessions(getAllSessions());
+        saveSession(finalSession, user!.id);
+        setAllSessions(getAllSessions(user!.id));
 
         const draftMessages = finalMessages.map(m => ({ role: m.role, content: m.content }));
         const turns = countTurns(draftMessages);
@@ -262,10 +262,10 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
     const newSession = createNewSession();
     setCurrentSession(newSession);
-    saveSession(newSession);
+    saveSession(newSession, user.id);
     setMessages([]);
     setHasStarted(false);
-    setAllSessions(getAllSessions());
+    setAllSessions(getAllSessions(user.id));
     setSidebarOpen(false);
 
     const draft = loadDiaryDraft();
@@ -282,7 +282,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   };
 
   const handleSelectSession = (sessionId: string) => {
-    const session = getSession(sessionId);
+    if (!user) return;
+    const session = getSession(sessionId, user.id);
     if (session) {
       setCurrentSession(session);
       setMessages(session.messages);
@@ -292,17 +293,19 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   };
 
   const handleRenameSession = (sessionId: string, newTitle: string) => {
-    renameSession(sessionId, newTitle);
-    setAllSessions(getAllSessions());
+    if (!user) return;
+    renameSession(sessionId, newTitle, user.id);
+    setAllSessions(getAllSessions(user.id));
     if (currentSession?.id === sessionId) {
       setCurrentSession(prev => prev ? { ...prev, title: newTitle } : prev);
     }
   };
 
   const handleDeleteSession = (sessionId: string) => {
-    deleteSession(sessionId);
+    if (!user) return;
+    deleteSession(sessionId, user.id);
 
-    const updatedSessions = getAllSessions();
+    const updatedSessions = getAllSessions(user.id);
     setAllSessions(updatedSessions);
 
     if (currentSession?.id === sessionId) {
@@ -314,7 +317,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       } else {
         const newSession = createNewSession();
         setCurrentSession(newSession);
-        saveSession(newSession);
+        saveSession(newSession, user.id);
         setMessages([]);
         setHasStarted(false);
         setAllSessions([newSession]);

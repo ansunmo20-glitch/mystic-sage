@@ -13,25 +13,13 @@ export interface ChatSession {
   messages: Message[];
 }
 
-const SESSIONS_KEY = 'mystic_sessions';
+function sessionsKey(userId: string): string {
+  return `mystic_sessions_${userId}`;
+}
 
 export function generateTitle(firstMessage: string): string {
   const trimmed = firstMessage.trim();
   return trimmed.length > 30 ? trimmed.slice(0, 30) + '...' : trimmed;
-}
-
-export function renameSession(sessionId: string, newTitle: string): void {
-  try {
-    const sessions = getAllSessions();
-    const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      session.title = newTitle.trim() || session.title;
-      session.updatedAt = new Date().toISOString();
-      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-    }
-  } catch (error) {
-    console.error('Error renaming session:', error);
-  }
 }
 
 export function formatSessionDate(dateString: string): string {
@@ -39,9 +27,9 @@ export function formatSessionDate(dateString: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function getAllSessions(): ChatSession[] {
+export function getAllSessions(userId: string): ChatSession[] {
   try {
-    const data = localStorage.getItem(SESSIONS_KEY);
+    const data = localStorage.getItem(sessionsKey(userId));
     if (!data) return [];
     const sessions = JSON.parse(data) as ChatSession[];
     return sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -51,8 +39,8 @@ export function getAllSessions(): ChatSession[] {
   }
 }
 
-export function getSession(sessionId: string): ChatSession | null {
-  const sessions = getAllSessions();
+export function getSession(sessionId: string, userId: string): ChatSession | null {
+  const sessions = getAllSessions(userId);
   return sessions.find(s => s.id === sessionId) || null;
 }
 
@@ -67,9 +55,9 @@ export function createNewSession(): ChatSession {
   };
 }
 
-export function saveSession(session: ChatSession): void {
+export function saveSession(session: ChatSession, userId: string): void {
   try {
-    const sessions = getAllSessions();
+    const sessions = getAllSessions(userId);
     const index = sessions.findIndex(s => s.id === session.id);
 
     if (index >= 0) {
@@ -78,32 +66,46 @@ export function saveSession(session: ChatSession): void {
       sessions.push(session);
     }
 
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    localStorage.setItem(sessionsKey(userId), JSON.stringify(sessions));
   } catch (error) {
     console.error('Error saving session:', error);
   }
 }
 
-export function deleteSession(sessionId: string): void {
+export function deleteSession(sessionId: string, userId: string): void {
   try {
-    const sessions = getAllSessions();
+    const sessions = getAllSessions(userId);
     const filtered = sessions.filter(s => s.id !== sessionId);
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(filtered));
+    localStorage.setItem(sessionsKey(userId), JSON.stringify(filtered));
   } catch (error) {
     console.error('Error deleting session:', error);
   }
 }
 
-export function updateSessionTitle(sessionId: string, firstUserMessage: string): void {
+export function updateSessionTitle(sessionId: string, firstUserMessage: string, userId: string): void {
   try {
-    const sessions = getAllSessions();
+    const sessions = getAllSessions(userId);
     const session = sessions.find(s => s.id === sessionId);
     if (session && session.title === 'New Conversation') {
       session.title = generateTitle(firstUserMessage);
       session.updatedAt = new Date().toISOString();
-      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+      localStorage.setItem(sessionsKey(userId), JSON.stringify(sessions));
     }
   } catch (error) {
     console.error('Error updating session title:', error);
+  }
+}
+
+export function renameSession(sessionId: string, newTitle: string, userId: string): void {
+  try {
+    const sessions = getAllSessions(userId);
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.title = newTitle.trim() || session.title;
+      session.updatedAt = new Date().toISOString();
+      localStorage.setItem(sessionsKey(userId), JSON.stringify(sessions));
+    }
+  } catch (error) {
+    console.error('Error renaming session:', error);
   }
 }
