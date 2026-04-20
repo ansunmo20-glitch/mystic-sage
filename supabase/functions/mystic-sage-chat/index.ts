@@ -640,12 +640,26 @@ Required format:
 
               const type = parsed.type as string;
 
-              if (type === "content_block_delta") {
+            if (type === "content_block_delta") {
                 const delta = parsed.delta as Record<string, unknown>;
                 if (delta?.type === "text_delta") {
                   const chunk = delta.text as string;
                   fullText += chunk;
-                  controller.enqueue(encoder.encode(sseEvent("chunk", JSON.stringify({ text: chunk }))));
+                  // message 필드 내용만 추출해서 스트리밍
+                  const msgMatch = fullText.match(/"message"\s*:\s*"([\s\S]*)/);
+                  if (msgMatch) {
+                    const raw = msgMatch[1];
+                    const endIdx = raw.search(/(?<!\\)"\s*,\s*"options"/);
+                    const extracted = endIdx >= 0 ? raw.slice(0, endIdx) : raw;
+                    const prevMatch = fullText.slice(0, -chunk.length).match(/"message"\s*:\s*"([\s\S]*)/);
+                    const prevRaw = prevMatch ? prevMatch[1] : "";
+                    const prevEnd = prevRaw.search(/(?<!\\)"\s*,\s*"options"/);
+                    const prevExtracted = prevEnd >= 0 ? prevRaw.slice(0, prevEnd) : prevRaw;
+                    const newContent = extracted.slice(prevExtracted.length).replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                    if (newContent) {
+                      controller.enqueue(encoder.encode(sseEvent("chunk", JSON.stringify({ text: newContent }))));
+                    }
+                  }
                 }
               } else if (type === "message_delta") {
                 const usage = (parsed.usage as Record<string, number>) ?? {};
