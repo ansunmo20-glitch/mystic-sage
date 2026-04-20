@@ -493,7 +493,7 @@ Deno.serve(async (req: Request) => {
       const DIARY_SYSTEM_PROMPT = `You are a diary summarizer. Analyze the counseling conversation and return ONLY a raw JSON object with NO markdown formatting, NO backticks, NO explanation. Just the JSON object itself.
 Required format:
 {
-  "summary": "1-2 sentences in first person starting with Today I...",
+  "summary": "3-5 sentences in first person starting with Today I... Capture: what happened, how I felt during the conversation, what I realized or what was hard to face. Write a meaningful, emotionally honest summary that reflects the depth of the conversation. Do not write a one-liner.",
   "emotionBefore": "1-3 words describing how user felt at start",
   "emotionAfter": "1-3 words describing how user felt at end",
   "sageMessage": "the most meaningful insight from the session in modern everyday language, not a scripture quote"
