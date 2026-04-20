@@ -344,8 +344,9 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
   const safeMaxTokens = maxTokens || 10000;
   const safeTokensUsed = tokensUsed || 0;
-  const tokenPercentage = safeMaxTokens > 0 ? Math.max(0, Math.min(100, ((safeMaxTokens - safeTokensUsed) / safeMaxTokens) * 100)) : 0;
-  const capacityColor = tokenPercentage > 30 ? '#C4A96E' : tokenPercentage > 10 ? '#D4A574' : '#C97C5D';
+  const isLimitReached = safeTokensUsed >= safeMaxTokens;
+  const tokenPercentage = isLimitReached ? 100 : safeMaxTokens > 0 ? Math.max(0, Math.min(100, (safeTokensUsed / safeMaxTokens) * 100)) : 0;
+  const capacityColor = isLimitReached ? '#DC2626' : tokenPercentage < 70 ? '#C4A96E' : tokenPercentage < 90 ? '#D4A574' : '#C97C5D';
   const showLimitScreen = !canUseSession && hasStarted;
 
   return (
@@ -392,8 +393,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                   }}
                 />
               </div>
-              <p className="text-xs text-[#9B9B9B] mt-1">
-                {Math.round((safeTokensUsed / 1000) * 10) / 10}k / {safeMaxTokens / 1000}k tokens
+              <p className={`text-xs mt-1 ${isLimitReached ? 'text-red-600 font-medium' : 'text-[#9B9B9B]'}`}>
+                {isLimitReached ? 'Limit reached' : `${Math.round((safeTokensUsed / 1000) * 10) / 10}k / ${safeMaxTokens / 1000}k tokens`}
               </p>
             </div>
 
