@@ -75,6 +75,31 @@ export function deleteDiaryEntry(id: string, userId: string): void {
   }
 }
 
+export function migrateLegacyDiaryEntries(userId: string): void {
+  const MIGRATION_KEY = 'diary_migration_done';
+  if (localStorage.getItem(MIGRATION_KEY)) return;
+
+  try {
+    const raw = localStorage.getItem('diary_entries');
+    if (raw) {
+      const legacy = JSON.parse(raw) as DiaryEntry[];
+      if (Array.isArray(legacy) && legacy.length > 0) {
+        const existing = loadDiaryEntries(userId);
+        const existingIds = new Set(existing.map(e => e.id));
+        const merged = [
+          ...legacy.filter(e => !existingIds.has(e.id)),
+          ...existing,
+        ];
+        localStorage.setItem(diaryEntriesKey(userId), JSON.stringify(merged));
+        localStorage.removeItem('diary_entries');
+      }
+    }
+  } catch {
+  }
+
+  localStorage.setItem(MIGRATION_KEY, 'true');
+}
+
 export function countTurns(messages: { role: string }[]): number {
   let turns = 0;
   for (let i = 0; i < messages.length - 1; i++) {

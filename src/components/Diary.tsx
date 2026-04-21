@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 import { DiaryDetail } from './DiaryDetail';
-import { loadDiaryEntries } from '../lib/diaryStorage';
+import { loadDiaryEntries, migrateLegacyDiaryEntries } from '../lib/diaryStorage';
 import { isEntryLocked } from '../lib/config';
 import type { DiaryEntry } from '../lib/diaryTypes';
 
@@ -92,6 +92,12 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
+
+  useEffect(() => {
+    if (isLoaded && user?.id) {
+      migrateLegacyDiaryEntries(user.id);
+    }
+  }, [isLoaded, user?.id]);
 
   useEffect(() => {
     setSelectedEntry(null);
