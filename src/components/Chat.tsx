@@ -131,7 +131,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       const currentTokensUsed = tokensUsed ?? 0;
       const currentMaxTokens = maxTokens ?? 10000;
 
-      if (currentTokensUsed >= currentMaxTokens) {
+      if (subscriptionStatus !== 'paid' && currentTokensUsed >= currentMaxTokens) {
         setModalTitle('Session Limit Reached');
         setModalMessage("You've used all your tokens this week. Come back next Monday for a fresh start!");
         setModalOpen(true);
