@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 import { DiaryDetail } from './DiaryDetail';
 import { loadDiaryEntries } from '../lib/diaryStorage';
 import { isEntryLocked } from '../lib/config';
@@ -85,14 +86,20 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Diary({ onNavigateHome }: DiaryProps) {
+  const { user, isLoaded } = useUser();
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
+  useEffect(() => {
+    setSelectedEntry(null);
+  }, [user?.id]);
+
   const today = todayStr();
-  const entries = loadDiaryEntries();
+  console.log('[DiaryDebug] loadDiaryEntries userId:', user?.id ?? null);
+  const entries = isLoaded && user ? loadDiaryEntries(user.id) : [];
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -142,6 +149,7 @@ export function Diary({ onNavigateHome }: DiaryProps) {
         entry={selectedEntry}
         onBack={() => setSelectedEntry(null)}
         onNavigateHome={onNavigateHome}
+        userId={user?.id || ''}
       />
     );
   }

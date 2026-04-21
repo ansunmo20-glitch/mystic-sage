@@ -64,7 +64,13 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) {
+      setCurrentSession(null);
+      setAllSessions([]);
+      setMessages([]);
+      setHasStarted(false);
+      return;
+    }
 
     const sessions = getAllSessions(user.id);
     setAllSessions(sessions);
@@ -79,11 +85,13 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       setCurrentSession(newSession);
       saveSession(newSession, user.id);
       setAllSessions([newSession]);
+      setMessages([]);
+      setHasStarted(false);
     }
 
     const email = user.emailAddresses?.[0]?.emailAddress || user.id;
     ensureUserTokens(user.id, email).then(() => loadSessionUsage());
-  }, [user]);
+  }, [user?.id]);
 
   const loadSessionUsage = async () => {
     if (!user || !isLoaded) return;
@@ -163,6 +171,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
     setInput('');
     setLoading(true);
+    setTimeout(() => { textareaRef.current?.focus(); }, 0);
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -228,16 +237,19 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         const draftMessages = finalMessages.map(m => ({ role: m.role, content: m.content }));
         const turns = countTurns(draftMessages);
         if (turns > 0 && turns % 3 === 0) {
+          console.log('[DiaryDebug] saveDiaryDraft userId:', user!.id);
           saveDiaryDraft({
             sessionId: finalSession.id,
             date: new Date().toISOString().slice(0, 10),
             messages: draftMessages,
-          });
+          }, user!.id);
         }
 
         if (tokenUsage) {
           setTokensUsed((prev) => prev + tokenUsage.total);
         }
+
+        setTimeout(() => { textareaRef.current?.focus(); }, 0);
       },
       onError: (error) => {
         console.error('Error:', error);
@@ -268,16 +280,16 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     setAllSessions(getAllSessions(user.id));
     setSidebarOpen(false);
 
-    const draft = loadDiaryDraft();
+    const draft = loadDiaryDraft(user.id);
     if (draft && countTurns(draft.messages) >= 3) {
       generateDiaryEntry(draft).then(entry => {
-        saveDiaryEntry(entry);
-        clearDiaryDraft();
+        saveDiaryEntry(entry, user.id);
+        clearDiaryDraft(user.id);
       }).catch(() => {
-        clearDiaryDraft();
+        clearDiaryDraft(user.id);
       });
     } else if (draft) {
-      clearDiaryDraft();
+      clearDiaryDraft(user.id);
     }
   };
 

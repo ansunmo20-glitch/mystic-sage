@@ -19,6 +19,7 @@ interface DiaryDetailProps {
   onBack: () => void;
   onNavigateHome: () => void;
   isPaidUser?: boolean;
+  userId: string;
 }
 
 function AutoTextarea({
@@ -54,7 +55,7 @@ function AutoTextarea({
   );
 }
 
-export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false }: DiaryDetailProps) {
+export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false, userId }: DiaryDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const locked = isEntryLocked(entry.date, isPaidUser);
@@ -74,7 +75,7 @@ export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false 
       emotionAfter,
       sageMessage,
     };
-    updateDiaryEntry(updated);
+    updateDiaryEntry(updated, userId);
     setCurrent(updated);
     setIsEditing(false);
   };
@@ -88,7 +89,7 @@ export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false 
   };
 
   const handleDelete = () => {
-    deleteDiaryEntry(current.id);
+    deleteDiaryEntry(current.id, userId);
     onBack();
   };
 
