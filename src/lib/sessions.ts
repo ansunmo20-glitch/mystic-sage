@@ -68,6 +68,17 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
   const resolvedMaxTokens = existingSession.max_tokens ?? DEFAULT_MAX_TOKENS;
   const resolvedTokensUsed = existingSession.tokens_used ?? 0;
 
+  if (existingSession.subscription_status === 'paid') {
+    return {
+      canUseSession: true,
+      sessionsUsed: existingSession.sessions_used,
+      maxSessions,
+      tokensUsed: resolvedTokensUsed,
+      maxTokens: resolvedMaxTokens,
+      message: 'Paid user',
+    };
+  }
+
   if (existingSession.week_start_date !== weekStart) {
     console.log('[sessions] New week — resetting. tokens_used was:', resolvedTokensUsed);
     const { error: updateError } = await supabase
@@ -143,13 +154,14 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
   weekStart: string;
   tokensUsed: number;
   maxTokens: number;
+  subscriptionStatus: string;
 }> {
   const weekStart = getWeekStartDate();
   const maxSessions = 1;
 
   const { data: session, error } = await supabase
     .from('user_sessions')
-    .select('sessions_used, week_start_date, tokens_used, max_tokens')
+    .select('sessions_used, week_start_date, tokens_used, max_tokens, subscription_status')
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -166,11 +178,13 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
       weekStart,
       tokensUsed: 0,
       maxTokens: DEFAULT_MAX_TOKENS,
+      subscriptionStatus: 'free',
     };
   }
 
   const resolvedMaxTokens = session.max_tokens ?? DEFAULT_MAX_TOKENS;
   const resolvedTokensUsed = session.tokens_used ?? 0;
+  const subscriptionStatus = session.subscription_status ?? 'free';
 
   if (session.week_start_date !== weekStart) {
     console.log('[sessions] getCurrentSessionUsage — stale week, returning reset values');
@@ -180,12 +194,14 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
       weekStart,
       tokensUsed: 0,
       maxTokens: resolvedMaxTokens,
+      subscriptionStatus,
     };
   }
 
   console.log(
     '[sessions] getCurrentSessionUsage — tokens_used:', resolvedTokensUsed,
-    'max_tokens:', resolvedMaxTokens
+    'max_tokens:', resolvedMaxTokens,
+    'subscription_status:', subscriptionStatus
   );
 
   return {
@@ -194,6 +210,7 @@ export async function getCurrentSessionUsage(userId: string): Promise<{
     weekStart,
     tokensUsed: resolvedTokensUsed,
     maxTokens: resolvedMaxTokens,
+    subscriptionStatus,
   };
 }
 

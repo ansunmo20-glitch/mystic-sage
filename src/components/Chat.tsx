@@ -60,6 +60,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCrisisBanner, setShowCrisisBanner] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'free' | 'paid'>('free');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -104,7 +105,8 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       setMaxSessions(usage.maxSessions);
       setTokensUsed(resolvedTokensUsed);
       setMaxTokens(resolvedMaxTokens);
-      setCanUseSession(resolvedTokensUsed < resolvedMaxTokens);
+      setSubscriptionStatus((usage.subscriptionStatus as 'free' | 'paid') ?? 'free');
+      setCanUseSession(usage.subscriptionStatus === 'paid' || resolvedTokensUsed < resolvedMaxTokens);
     } catch (error) {
       console.error('Error loading session usage:', error);
     }
@@ -357,12 +359,13 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }
   };
 
+  const isPaid = subscriptionStatus === 'paid';
   const safeMaxTokens = maxTokens || 10000;
   const safeTokensUsed = tokensUsed || 0;
-  const isLimitReached = safeTokensUsed >= safeMaxTokens;
+  const isLimitReached = !isPaid && safeTokensUsed >= safeMaxTokens;
   const tokenPercentage = isLimitReached ? 100 : safeMaxTokens > 0 ? Math.max(0, Math.min(100, (safeTokensUsed / safeMaxTokens) * 100)) : 0;
   const capacityColor = isLimitReached ? '#DC2626' : tokenPercentage < 70 ? '#C4A96E' : tokenPercentage < 90 ? '#D4A574' : '#C97C5D';
-  const showLimitScreen = !canUseSession && hasStarted;
+  const showLimitScreen = !isPaid && !canUseSession && hasStarted;
 
   return (
     <div className="min-h-screen bg-[#FAF6EF] flex flex-col">
@@ -398,6 +401,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
           </div>
 
           <div className="flex items-center gap-4">
+            {!isPaid && (
             <div className="text-right">
               <div className="w-40 h-2 bg-[#F5EFE7] rounded-full overflow-hidden border border-[#E8DED0]">
                 <div
@@ -412,6 +416,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                 {isLimitReached ? 'Limit reached' : `${Math.round((safeTokensUsed / 1000) * 10) / 10}k / ${safeMaxTokens / 1000}k tokens`}
               </p>
             </div>
+            )}
 
             <button
               onClick={() => setSettingsOpen(true)}
