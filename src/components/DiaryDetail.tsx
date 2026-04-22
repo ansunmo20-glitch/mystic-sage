@@ -89,7 +89,7 @@ export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false,
   };
 
   const handleDelete = () => {
-    deleteDiaryEntry(current.id, userId);
+    deleteDiaryEntry(current.sessionId, userId);
     onBack();
   };
 

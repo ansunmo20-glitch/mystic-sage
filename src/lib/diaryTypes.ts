@@ -1,6 +1,8 @@
 export interface DiaryEntry {
   id: string;
+  sessionId: string;
   date: string;
+  createdAt: string;
   summary: string;
   emotionBefore: string;
   emotionAfter: string;

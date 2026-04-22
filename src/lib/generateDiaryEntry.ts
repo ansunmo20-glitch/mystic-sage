@@ -9,7 +9,9 @@ export async function generateDiaryEntry(draft: DiaryDraft): Promise<DiaryEntry>
 
   const fallbackEntry: DiaryEntry = {
     id: crypto.randomUUID(),
+    sessionId: draft.sessionId,
     date: draft.date,
+    createdAt: new Date().toISOString(),
     summary: firstUserMessage,
     emotionBefore: 'overwhelmed',
     emotionAfter: 'unknown',
@@ -66,7 +68,9 @@ export async function generateDiaryEntry(draft: DiaryDraft): Promise<DiaryEntry>
 
     return {
       id: crypto.randomUUID(),
+      sessionId: draft.sessionId,
       date: draft.date,
+      createdAt: new Date().toISOString(),
       summary: parsed.summary ?? fallbackEntry.summary,
       emotionBefore: parsed.emotionBefore ?? fallbackEntry.emotionBefore,
       emotionAfter: parsed.emotionAfter ?? fallbackEntry.emotionAfter,

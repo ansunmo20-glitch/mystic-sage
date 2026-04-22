@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 import { DiaryDetail } from './DiaryDetail';
@@ -22,6 +22,16 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch {
+    return '';
+  }
+}
+
 interface DiaryProps {
   onNavigateHome: () => void;
 }
@@ -33,9 +43,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
 
   const handleUpgrade = () => {
     setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 2500);
+    setTimeout(() => setShowToast(false), 2500);
   };
 
   return (
@@ -85,6 +93,169 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function DayCarousel({
+  entries,
+  date,
+  onSelect,
+  onClose,
+}: {
+  entries: DiaryEntry[];
+  date: string;
+  onSelect: (e: DiaryEntry) => void;
+  onClose: () => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [cW, setCW] = useState(300);
+
+  useLayoutEffect(() => {
+    if (trackRef.current) setCW(trackRef.current.offsetWidth);
+  }, []);
+
+  const PEEK = 32;
+  const GAP = 12;
+  // cardWidth such that: left_peek + cardWidth + gap + right_peek = cW, with left_peek = right_peek = PEEK
+  const cardW = Math.max(0, cW - 2 * PEEK - GAP);
+  // step is how far we shift per card index
+  const step = Math.max(0, cW - 2 * PEEK);
+  const tx = PEEK - idx * step;
+
+  const getPreview = (entry: DiaryEntry): string => {
+    const chat = entry.originalChat as { role: string; content: string }[] | null;
+    const msg = Array.isArray(chat)
+      ? (chat.find(m => m.role === 'user')?.content ?? entry.summary)
+      : entry.summary;
+    return msg.length > 20 ? msg.slice(0, 20) + '…' : msg;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end">
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(61,46,30,0.48)' }}
+        onClick={onClose}
+      />
+      <div
+        className="relative w-full"
+        style={{
+          backgroundColor: '#faf6ef',
+          borderRadius: '20px 20px 0 0',
+          boxShadow: '0 -6px 32px rgba(61,46,30,0.14)',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <h3
+            style={{
+              color: '#3d2e1e',
+              fontFamily: '"Cormorant Garamond", "Playfair Display", Georgia, serif',
+              fontWeight: 600,
+              fontSize: '1.1rem',
+            }}
+          >
+            {formatShortDate(date)}
+          </h3>
+          <span style={{ color: '#a89070', fontSize: '0.8rem' }}>
+            {entries.length} entries
+          </span>
+        </div>
+
+        {/* Carousel track */}
+        <div ref={trackRef} className="overflow-hidden" style={{ paddingBottom: 2 }}>
+          <div
+            className="flex"
+            style={{
+              gap: GAP,
+              transform: `translateX(${tx}px)`,
+              transition: 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              willChange: 'transform',
+            }}
+          >
+            {entries.map((entry, i) => {
+              const isActive = i === idx;
+              return (
+                <div
+                  key={entry.sessionId}
+                  style={{
+                    width: cardW,
+                    flexShrink: 0,
+                    transform: isActive ? 'scale(1)' : 'scale(0.9)',
+                    opacity: isActive ? 1 : 0.6,
+                    transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => (isActive ? onSelect(entry) : setIdx(i))}
+                >
+                  <div
+                    className="rounded-2xl p-4"
+                    style={{
+                      backgroundColor: '#fff',
+                      border: isActive ? '1.5px solid #c4a96e' : '1px solid #e2d8c8',
+                      boxShadow: isActive ? '0 2px 12px rgba(196,169,110,0.15)' : '0 1px 4px rgba(61,46,30,0.06)',
+                      minHeight: 100,
+                    }}
+                  >
+                    <p style={{ fontSize: '0.7rem', color: '#a89070', marginBottom: 8 }}>
+                      {formatTime(entry.createdAt)}
+                    </p>
+                    <p style={{ fontSize: '0.875rem', color: '#3d2e1e', lineHeight: 1.5 }}>
+                      {getPreview(entry)}
+                    </p>
+                    {isActive && (
+                      <p style={{ fontSize: '0.68rem', color: '#c4a96e', marginTop: 12, textAlign: 'right' }}>
+                        tap to open →
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Navigation row: prev · dots · next */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => setIdx(i => Math.max(0, i - 1))}
+            disabled={idx === 0}
+            className="p-1.5 rounded-full transition-opacity"
+            style={{ opacity: idx === 0 ? 0.3 : 1, color: '#c4a96e' }}
+          >
+            <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+          </button>
+
+          <div className="flex gap-1.5 items-center">
+            {entries.map((_, i) => (
+              <span
+                key={i}
+                onClick={() => setIdx(i)}
+                className="block rounded-full cursor-pointer"
+                style={{
+                  width: i === idx ? 16 : 5,
+                  height: 5,
+                  backgroundColor: i === idx ? '#c4a96e' : '#d4c4a0',
+                  transition: 'width 0.3s ease-out, background-color 0.3s',
+                }}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={() => setIdx(i => Math.min(entries.length - 1, i + 1))}
+            disabled={idx === entries.length - 1}
+            className="p-1.5 rounded-full transition-opacity"
+            style={{ opacity: idx === entries.length - 1 ? 0.3 : 1, color: '#c4a96e' }}
+          >
+            <ChevronRight className="w-5 h-5" strokeWidth={2} />
+          </button>
+        </div>
+
+        <div style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)' }} />
+      </div>
+    </div>
+  );
+}
+
 export function Diary({ onNavigateHome }: DiaryProps) {
   const { user, isLoaded } = useUser();
   const now = new Date();
@@ -92,6 +263,7 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [carouselDate, setCarouselDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoaded && user?.id) {
@@ -101,10 +273,10 @@ export function Diary({ onNavigateHome }: DiaryProps) {
 
   useEffect(() => {
     setSelectedEntry(null);
+    setCarouselDate(null);
   }, [user?.id]);
 
   const today = todayStr();
-  console.log('[DiaryDebug] loadDiaryEntries userId:', user?.id ?? null);
   const entries = isLoaded && user ? loadDiaryEntries(user.id) : [];
 
   const prevMonth = () => {
@@ -117,13 +289,21 @@ export function Diary({ onNavigateHome }: DiaryProps) {
     else setViewMonth(m => m + 1);
   };
 
-  const entryByDate: Record<string, DiaryEntry> = {};
-  entries.forEach(e => { entryByDate[e.date] = e; });
+  // Group entries by date, sorted by createdAt within each day
+  const entriesByDate: Record<string, DiaryEntry[]> = {};
+  entries.forEach(e => {
+    if (!entriesByDate[e.date]) entriesByDate[e.date] = [];
+    entriesByDate[e.date].push(e);
+  });
+  Object.values(entriesByDate).forEach(arr =>
+    arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  );
 
   const padded = (n: number) => String(n).padStart(2, '0');
-  const getEntry = (day: number): DiaryEntry | null => {
+
+  const getDateEntries = (day: number): DiaryEntry[] => {
     const key = `${viewYear}-${padded(viewMonth + 1)}-${padded(day)}`;
-    return entryByDate[key] || null;
+    return entriesByDate[key] || [];
   };
 
   const isTodayCell = (day: number): boolean => {
@@ -131,12 +311,24 @@ export function Diary({ onNavigateHome }: DiaryProps) {
     return key === today;
   };
 
-  const handleEntryClick = (entry: DiaryEntry) => {
-    if (isEntryLocked(entry.date, IS_PAID_USER)) {
+  const handleDayClick = (dayEntries: DiaryEntry[]) => {
+    if (dayEntries.length === 0) return;
+    if (isEntryLocked(dayEntries[0].date, IS_PAID_USER)) {
       setShowUpgrade(true);
-    } else {
-      setSelectedEntry(entry);
+      return;
     }
+    if (dayEntries.length === 1) {
+      setCarouselDate(null);
+      setSelectedEntry(dayEntries[0]);
+    } else {
+      setCarouselDate(dayEntries[0].date);
+    }
+  };
+
+  // When back is pressed in DiaryDetail, restore carousel if it was open
+  const handleDiaryDetailBack = () => {
+    setSelectedEntry(null);
+    // carouselDate stays set → carousel reappears if user came from it
   };
 
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
@@ -147,13 +339,18 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const recentEntries = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  const recentEntries = [...entries].sort((a, b) => {
+    const d = b.date.localeCompare(a.date);
+    return d !== 0 ? d : b.createdAt.localeCompare(a.createdAt);
+  });
+
+  const carouselEntries = carouselDate ? (entriesByDate[carouselDate] ?? []) : null;
 
   if (selectedEntry) {
     return (
       <DiaryDetail
         entry={selectedEntry}
-        onBack={() => setSelectedEntry(null)}
+        onBack={handleDiaryDetailBack}
         onNavigateHome={onNavigateHome}
         userId={user?.id || ''}
       />
@@ -170,6 +367,7 @@ export function Diary({ onNavigateHome }: DiaryProps) {
       </header>
 
       <main className="flex-1 overflow-y-auto">
+        {/* Calendar */}
         <div className="max-w-2xl mx-auto px-4 pt-5 pb-3">
           <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e2d8c8' }}>
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: '#e2d8c8' }}>
@@ -209,20 +407,23 @@ export function Diary({ onNavigateHome }: DiaryProps) {
               <div className="grid grid-cols-7">
                 {cells.map((day, i) => {
                   if (day === null) {
-                    return <div key={`e-${i}`} className="h-11" />;
+                    return <div key={`e-${i}`} className="h-[52px]" />;
                   }
-                  const entry = getEntry(day);
+                  const dayEntries = getDateEntries(day);
+                  const count = dayEntries.length;
                   const isToday = isTodayCell(day);
-                  const locked = entry ? isEntryLocked(entry.date, IS_PAID_USER) : false;
+                  const locked = count > 0 ? isEntryLocked(dayEntries[0].date, IS_PAID_USER) : false;
+                  const dotColor = isToday ? '#fff8ee' : locked ? '#c4b99a' : '#c4a96e';
+
                   return (
-                    <div key={day} className="h-11 flex flex-col items-center justify-start pt-1">
+                    <div key={day} className="h-[52px] flex flex-col items-center justify-start pt-1">
                       <button
-                        onClick={() => entry && handleEntryClick(entry)}
-                        disabled={!entry && !isToday}
+                        onClick={() => handleDayClick(dayEntries)}
+                        disabled={count === 0 && !isToday}
                         className="w-8 h-8 flex items-center justify-center rounded-full transition-all"
                         style={{
                           backgroundColor: isToday ? '#c4a96e' : 'transparent',
-                          cursor: entry ? 'pointer' : 'default',
+                          cursor: count > 0 ? 'pointer' : 'default',
                         }}
                       >
                         <span
@@ -232,18 +433,33 @@ export function Diary({ onNavigateHome }: DiaryProps) {
                           {day}
                         </span>
                       </button>
-                      <div className="h-1.5 flex items-center justify-center mt-0.5">
-                        {entry && !isToday && (
+
+                      {/* Badge area — fixed height so grid rows stay even */}
+                      <div className="h-[14px] flex items-center justify-center mt-0.5">
+                        {count === 1 && (
                           <span
                             className="block w-[5px] h-[5px] rounded-full"
-                            style={{ backgroundColor: locked ? '#c4b99a' : '#c4a96e' }}
+                            style={{ backgroundColor: dotColor }}
                           />
                         )}
-                        {entry && isToday && (
+                        {count === 2 && (
+                          <span className="flex gap-[3px]">
+                            <span className="block w-[5px] h-[5px] rounded-full" style={{ backgroundColor: dotColor }} />
+                            <span className="block w-[5px] h-[5px] rounded-full" style={{ backgroundColor: dotColor }} />
+                          </span>
+                        )}
+                        {count >= 3 && (
                           <span
-                            className="block w-[5px] h-[5px] rounded-full"
-                            style={{ backgroundColor: '#fff8ee' }}
-                          />
+                            className="flex items-center justify-center rounded-full text-white font-bold leading-none"
+                            style={{
+                              width: 16,
+                              height: 16,
+                              fontSize: 9,
+                              backgroundColor: locked ? '#c4b99a' : '#c4a96e',
+                            }}
+                          >
+                            {count}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -254,6 +470,7 @@ export function Diary({ onNavigateHome }: DiaryProps) {
           </div>
         </div>
 
+        {/* Recent Entries */}
         <div className="max-w-2xl mx-auto px-4 pb-8">
           <h3
             className="font-serif text-lg mb-2 px-1"
@@ -264,20 +481,27 @@ export function Diary({ onNavigateHome }: DiaryProps) {
           <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e2d8c8' }}>
             {recentEntries.map((entry, idx) => {
               const locked = isEntryLocked(entry.date, IS_PAID_USER);
+              const time = formatTime(entry.createdAt);
               return (
                 <button
-                  key={entry.id}
-                  onClick={() => handleEntryClick(entry)}
-                  className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#fdf8f2]"
-                  style={{
-                    borderTop: idx === 0 ? 'none' : '1px solid #ede4d6',
+                  key={entry.sessionId}
+                  onClick={() => {
+                    if (locked) { setShowUpgrade(true); return; }
+                    setCarouselDate(null);
+                    setSelectedEntry(entry);
                   }}
+                  className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#fdf8f2]"
+                  style={{ borderTop: idx === 0 ? 'none' : '1px solid #ede4d6' }}
                 >
-                  <div
-                    className="text-xs font-medium shrink-0 w-[70px]"
-                    style={{ color: locked ? '#c4b99a' : '#a89070' }}
-                  >
-                    {formatShortDate(entry.date)}
+                  <div className="shrink-0 w-[76px]">
+                    <p className="text-xs font-medium" style={{ color: locked ? '#c4b99a' : '#a89070' }}>
+                      {formatShortDate(entry.date)}
+                    </p>
+                    {time && (
+                      <p className="text-[10px] mt-0.5" style={{ color: locked ? '#d4c4a0' : '#b8a080' }}>
+                        {time}
+                      </p>
+                    )}
                   </div>
                   <div
                     className="flex-1 min-w-0 text-sm truncate"
@@ -319,6 +543,16 @@ export function Diary({ onNavigateHome }: DiaryProps) {
       </nav>
 
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+
+      {/* Carousel — only shown when 2+ entries exist for the selected date */}
+      {!selectedEntry && carouselEntries && carouselEntries.length >= 2 && (
+        <DayCarousel
+          entries={carouselEntries}
+          date={carouselDate!}
+          onSelect={entry => setSelectedEntry(entry)}
+          onClose={() => setCarouselDate(null)}
+        />
+      )}
     </div>
   );
 }
