@@ -282,6 +282,15 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       return;
     }
 
+    const existingEmpty = allSessions.find(s => s.messages.length === 0);
+    if (existingEmpty) {
+      setCurrentSession(existingEmpty);
+      setMessages([]);
+      setHasStarted(false);
+      setSidebarOpen(false);
+      return;
+    }
+
     const newSession = createNewSession();
     setCurrentSession(newSession);
     saveSession(newSession, user.id);

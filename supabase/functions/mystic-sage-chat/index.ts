@@ -490,14 +490,28 @@ Deno.serve(async (req: Request) => {
     }
 
     if (isDiarySummary) {
+      const turnCount = Math.floor(messages.filter(m => m.role === 'user').length);
+      const summaryLengthGuide =
+        turnCount <= 5  ? '2–3 sentences' :
+        turnCount <= 15 ? '1–2 short paragraphs' :
+                          '2–4 paragraphs';
+
       const DIARY_SYSTEM_PROMPT = `You are a diary summarizer. Analyze the counseling conversation and return ONLY a raw JSON object with NO markdown formatting, NO backticks, NO explanation. Just the JSON object itself.
+
+This conversation has ${turnCount} user turn(s).
+
 Required format:
 {
-  "summary": "Write as if you are the user, reflecting on the session in a private journal. Capture what felt significant — the weight of what was brought in, what moved or shifted during the conversation, and where things settled. Do not follow a fixed structure. Do not number your points. Let the conversation's depth and texture guide the length. Write only what honestly happened. Use first person, past tense.",
-  "emotionBefore": "1-3 words describing how user felt at start",
-  "emotionAfter": "1-3 words describing how user felt at end",
-  "sageMessage": "the most meaningful insight from the session in modern everyday language, not a scripture quote"
-}`;
+  "summary": "Write as if you are the user, reflecting on the session in a private journal. Length must be ${summaryLengthGuide} — scale depth to match the actual conversation length. Capture what felt significant, what moved or shifted, and where things settled. Use first person, past tense. Do not number points or follow a fixed structure.",
+  "emotionBefore": "1–3 words describing how the user felt at the START. Extract from their first 2–3 messages. NEVER return 'Unknown' — if not explicit, infer from tone and context (e.g. 'anxious', 'confused', 'frustrated', 'overwhelmed').",
+  "emotionAfter": "1–3 words describing how the user felt at the END. Extract from their last 2–3 messages. NEVER return 'Unknown' — look for any shift, relief, clarity, or ongoing struggle and name it (e.g. 'calmer', 'still uncertain', 'more hopeful', 'drained but heard').",
+  "sageMessage": "The single most meaningful thing the assistant actually said or asked in this conversation. Paraphrase it in 1–2 natural sentences. It MUST be grounded in something that genuinely appeared in the conversation — not a generic statement."
+}
+
+CRITICAL RULES:
+- emotionBefore and emotionAfter MUST be inferred from the actual conversation. 'Unknown' is forbidden.
+- sageMessage MUST reflect something the assistant truly said or asked in this session.
+- summary length MUST scale with the conversation depth as specified above.`;
 
       const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -508,7 +522,7 @@ Required format:
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1024,
+          max_tokens: 2048,
           system: DIARY_SYSTEM_PROMPT,
           messages: messages,
         }),
