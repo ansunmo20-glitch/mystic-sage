@@ -15,6 +15,7 @@ import {
   createNewSession,
   saveSession,
   updateSessionTitle,
+  generateTitle,
   deleteSession,
   renameSession
 } from '../lib/sessionStorage';
@@ -185,12 +186,14 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
 
-    if (currentSession.messages.length === 0) {
+    const isFirstMessage = currentSession.messages.length === 0;
+    if (isFirstMessage) {
       updateSessionTitle(currentSession.id, messageText, user.id);
     }
 
     const updatedSession = {
       ...currentSession,
+      title: isFirstMessage ? generateTitle(messageText) : currentSession.title,
       messages: newMessages,
       updatedAt: new Date().toISOString()
     };
@@ -273,6 +276,11 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
   const handleNewConversation = async () => {
     if (!user) return;
+
+    if (currentSession && currentSession.messages.length === 0) {
+      setSidebarOpen(false);
+      return;
+    }
 
     const newSession = createNewSession();
     setCurrentSession(newSession);
