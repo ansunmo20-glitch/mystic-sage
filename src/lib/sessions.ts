@@ -2,6 +2,21 @@ import { supabase } from './supabase';
 
 const DEFAULT_MAX_TOKENS = 10000;
 
+async function getAdminWelcomeTokens(): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'welcome_tokens')
+      .maybeSingle();
+    if (error || !data) return DEFAULT_MAX_TOKENS;
+    const parsed = parseInt(data.value, 10);
+    return isNaN(parsed) || parsed <= 0 ? DEFAULT_MAX_TOKENS : parsed;
+  } catch {
+    return DEFAULT_MAX_TOKENS;
+  }
+}
+
 function getWeekStartDate(): string {
   const now = new Date();
   const dayOfWeek = now.getDay();
@@ -35,7 +50,8 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
   }
 
   if (!existingSession) {
-    console.log('[sessions] New user — inserting with max_tokens =', DEFAULT_MAX_TOKENS);
+    const adminMaxTokens = await getAdminWelcomeTokens();
+    console.log('[sessions] New user — inserting with max_tokens =', adminMaxTokens);
     const { error: insertError } = await supabase
       .from('user_sessions')
       .insert({
@@ -45,7 +61,7 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
         week_start_date: weekStart,
         last_session_at: new Date().toISOString(),
         tokens_used: 0,
-        max_tokens: DEFAULT_MAX_TOKENS,
+        max_tokens: adminMaxTokens,
         tokens_input: 0,
         tokens_output: 0,
       });
@@ -60,7 +76,7 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
       sessionsUsed: 1,
       maxSessions,
       tokensUsed: 0,
-      maxTokens: DEFAULT_MAX_TOKENS,
+      maxTokens: adminMaxTokens,
       message: 'Session started',
     };
   }
@@ -80,7 +96,8 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
   }
 
   if (existingSession.week_start_date !== weekStart) {
-    console.log('[sessions] New week — resetting. tokens_used was:', resolvedTokensUsed);
+    const adminMaxTokens = await getAdminWelcomeTokens();
+    console.log('[sessions] New week — resetting. tokens_used was:', resolvedTokensUsed, '| new max_tokens:', adminMaxTokens);
     const { error: updateError } = await supabase
       .from('user_sessions')
       .update({
@@ -90,6 +107,7 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
         tokens_used: 0,
         tokens_input: 0,
         tokens_output: 0,
+        max_tokens: adminMaxTokens,
       })
       .eq('user_id', userId);
 
@@ -103,7 +121,7 @@ export async function checkAndUpdateSession(userId: string, email: string): Prom
       sessionsUsed: 1,
       maxSessions,
       tokensUsed: 0,
-      maxTokens: resolvedMaxTokens,
+      maxTokens: adminMaxTokens,
       message: 'New week, session reset',
     };
   }
@@ -227,7 +245,8 @@ export async function ensureUserTokens(userId: string, email: string): Promise<v
   }
 
   if (!session) {
-    console.log('[sessions] ensureUserTokens — no record, creating with', DEFAULT_MAX_TOKENS, 'welcome tokens');
+    const adminMaxTokens = await getAdminWelcomeTokens();
+    console.log('[sessions] ensureUserTokens — no record, creating with', adminMaxTokens, 'welcome tokens');
     const weekStart = getWeekStartDate();
     const { error: insertError } = await supabase
       .from('user_sessions')
@@ -238,7 +257,7 @@ export async function ensureUserTokens(userId: string, email: string): Promise<v
         week_start_date: weekStart,
         last_session_at: new Date().toISOString(),
         tokens_used: 0,
-        max_tokens: DEFAULT_MAX_TOKENS,
+        max_tokens: adminMaxTokens,
         tokens_input: 0,
         tokens_output: 0,
       });
@@ -250,10 +269,11 @@ export async function ensureUserTokens(userId: string, email: string): Promise<v
   }
 
   if (session.max_tokens === null || session.max_tokens === undefined) {
-    console.log('[sessions] ensureUserTokens — fixing NULL max_tokens → ', DEFAULT_MAX_TOKENS);
+    const adminMaxTokens = await getAdminWelcomeTokens();
+    console.log('[sessions] ensureUserTokens — fixing NULL max_tokens → ', adminMaxTokens);
     await supabase
       .from('user_sessions')
-      .update({ max_tokens: DEFAULT_MAX_TOKENS })
+      .update({ max_tokens: adminMaxTokens })
       .eq('user_id', userId);
   }
 }

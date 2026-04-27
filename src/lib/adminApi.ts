@@ -23,7 +23,6 @@ export interface Announcement {
   created_at: string;
 }
 
-const SETTINGS_KEY = 'mysticSage_adminSettings';
 const ANNOUNCEMENTS_KEY = 'mysticSage_announcements';
 
 export async function fetchUsers(): Promise<UserSession[]> {
@@ -69,19 +68,22 @@ export async function setSubscriptionStatus(sessionId: string, status: 'free' | 
 }
 
 export async function fetchSettings(): Promise<Record<string, string>> {
-  const raw = localStorage.getItem(SETTINGS_KEY);
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as Record<string, string>;
-  } catch {
-    return {};
+  const { data, error } = await supabase
+    .from('admin_settings')
+    .select('key, value');
+  if (error) throw error;
+  const result: Record<string, string> = {};
+  for (const row of data || []) {
+    result[row.key] = row.value;
   }
+  return result;
 }
 
 export async function saveSetting(key: string, value: string): Promise<void> {
-  const current = await fetchSettings();
-  current[key] = value;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(current));
+  const { error } = await supabase
+    .from('admin_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  if (error) throw error;
 }
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
