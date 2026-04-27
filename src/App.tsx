@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
+import InAppBrowserGuard from './components/InAppBrowserGuard';
 import { Welcome } from './components/Welcome';
 import { Chat } from './components/Chat';
 import Login from './components/Login';
@@ -136,6 +137,7 @@ function AppContent() {
 function App() {
   return (
     <ClerkProvider publishableKey={clerkPubKey}>
+      <InAppBrowserGuard />
       <AppContent />
     </ClerkProvider>
   );
