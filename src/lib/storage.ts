@@ -1,15 +1,14 @@
-const WEEKLY_SESSIONS = 7;
+import { supabase } from './supabase';
 
-interface SessionData {
-  sessionsUsed: number;
-  weekStart: string;
-}
+export const WEEKLY_SESSIONS = 7;
 
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
+interface UserSettings {
+  user_id: string;
+  has_seen_welcome: boolean;
+  has_consented: boolean;
+  tokens_used: number;
+  sessions_used: number;
+  week_start: string;
 }
 
 function getWeekStart(): string {
@@ -22,72 +21,98 @@ function getWeekStart(): string {
   return monday.toISOString();
 }
 
-export function getSessionData(): SessionData {
-  const stored = localStorage.getItem('mysticSage_sessions');
+async function ensureSettings(userId: string): Promise<UserSettings> {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+
   const currentWeekStart = getWeekStart();
 
-  if (!stored) {
-    const newData: SessionData = {
-      sessionsUsed: 0,
-      weekStart: currentWeekStart,
+  if (!data) {
+    const newSettings: UserSettings = {
+      user_id: userId,
+      has_seen_welcome: false,
+      has_consented: false,
+      tokens_used: 0,
+      sessions_used: 0,
+      week_start: currentWeekStart,
     };
-    localStorage.setItem('mysticSage_sessions', JSON.stringify(newData));
-    return newData;
+    const { error: insertError } = await supabase
+      .from('user_settings')
+      .insert(newSettings);
+    if (insertError) throw insertError;
+    return newSettings;
   }
 
-  const data: SessionData = JSON.parse(stored);
-
-  if (data.weekStart !== currentWeekStart) {
-    const resetData: SessionData = {
-      sessionsUsed: 0,
-      weekStart: currentWeekStart,
-    };
-    localStorage.setItem('mysticSage_sessions', JSON.stringify(resetData));
-    return resetData;
+  if (data.week_start !== currentWeekStart) {
+    const reset = { sessions_used: 0, week_start: currentWeekStart };
+    const { error: updateError } = await supabase
+      .from('user_settings')
+      .update(reset)
+      .eq('user_id', userId);
+    if (updateError) throw updateError;
+    return { ...data, ...reset } as UserSettings;
   }
 
-  return data;
+  return data as UserSettings;
 }
 
-export function useSession(): void {
-  const data = getSessionData();
-  data.sessionsUsed += 1;
-  localStorage.setItem('mysticSage_sessions', JSON.stringify(data));
+export async function hasSeenWelcome(userId: string): Promise<boolean> {
+  const settings = await ensureSettings(userId);
+  return settings.has_seen_welcome;
 }
 
-export function getSessionCapacity(): { used: number; total: number; percentage: number } {
-  const data = getSessionData();
+export async function markWelcomeSeen(userId: string): Promise<void> {
+  await ensureSettings(userId);
+  const { error } = await supabase
+    .from('user_settings')
+    .update({ has_seen_welcome: true })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function hasConsented(userId: string): Promise<boolean> {
+  const settings = await ensureSettings(userId);
+  return settings.has_consented;
+}
+
+export async function markConsented(userId: string): Promise<void> {
+  await ensureSettings(userId);
+  const { error } = await supabase
+    .from('user_settings')
+    .update({ has_consented: true })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function getSessionData(userId: string): Promise<{ sessionsUsed: number; weekStart: string }> {
+  const settings = await ensureSettings(userId);
+  return { sessionsUsed: settings.sessions_used, weekStart: settings.week_start };
+}
+
+export async function useSession(userId: string): Promise<void> {
+  const settings = await ensureSettings(userId);
+  const { error } = await supabase
+    .from('user_settings')
+    .update({ sessions_used: settings.sessions_used + 1 })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function getSessionCapacity(userId: string): Promise<{ used: number; total: number; percentage: number }> {
+  const settings = await ensureSettings(userId);
   return {
-    used: data.sessionsUsed,
+    used: settings.sessions_used,
     total: WEEKLY_SESSIONS,
-    percentage: (data.sessionsUsed / WEEKLY_SESSIONS) * 100,
+    percentage: (settings.sessions_used / WEEKLY_SESSIONS) * 100,
   };
 }
 
-export function hasSessionsRemaining(): boolean {
-  const data = getSessionData();
-  return data.sessionsUsed < WEEKLY_SESSIONS;
+export async function hasSessionsRemaining(userId: string): Promise<boolean> {
+  const settings = await ensureSettings(userId);
+  return settings.sessions_used < WEEKLY_SESSIONS;
 }
-
-export function saveMessages(messages: Message[]): void {
-  localStorage.setItem('mysticSage_messages', JSON.stringify(messages));
-}
-
-export function loadMessages(): Message[] {
-  const stored = localStorage.getItem('mysticSage_messages');
-  return stored ? JSON.parse(stored) : [];
-}
-
-export function clearMessages(): void {
-  localStorage.removeItem('mysticSage_messages');
-}
-
-export function hasSeenWelcome(): boolean {
-  return localStorage.getItem('mysticSage_welcomed') === 'true';
-}
-
-export function markWelcomeSeen(): void {
-  localStorage.setItem('mysticSage_welcomed', 'true');
-}
-
-export { WEEKLY_SESSIONS };

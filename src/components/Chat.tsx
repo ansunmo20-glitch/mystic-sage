@@ -17,7 +17,7 @@ import {
   updateSessionTitle,
   generateTitle,
   deleteSession,
-  renameSession
+  renameSession,
 } from '../lib/sessionStorage';
 import {
   saveDiaryDraft,
@@ -35,7 +35,6 @@ interface Message {
   content: string;
   timestamp: string;
 }
-
 
 interface ChatProps {
   onNavigateDiary: () => void;
@@ -74,25 +73,30 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       return;
     }
 
-    const sessions = getAllSessions(user.id);
-    setAllSessions(sessions);
+    (async () => {
+      try {
+        const sessions = await getAllSessions(user.id);
+        setAllSessions(sessions);
 
-    if (sessions.length > 0) {
-      const latestSession = sessions[0];
-      setCurrentSession(latestSession);
-      setMessages(latestSession.messages);
-      setHasStarted(latestSession.messages.length > 0);
-    } else {
-      const newSession = createNewSession();
-      setCurrentSession(newSession);
-      saveSession(newSession, user.id);
-      setAllSessions([newSession]);
-      setMessages([]);
-      setHasStarted(false);
-    }
+        if (sessions.length > 0) {
+          const latestSession = sessions[0];
+          setCurrentSession(latestSession);
+          setMessages(latestSession.messages);
+          setHasStarted(latestSession.messages.length > 0);
+        } else {
+          const newSession = await createNewSession(user.id);
+          setCurrentSession(newSession);
+          setAllSessions([newSession]);
+          setMessages([]);
+          setHasStarted(false);
+        }
+      } catch (err) {
+        console.error('Error loading sessions:', err);
+      }
 
-    const email = user.emailAddresses?.[0]?.emailAddress || user.id;
-    ensureUserTokens(user.id, email).then(() => loadSessionUsage());
+      const email = user.emailAddresses?.[0]?.emailAddress || user.id;
+      ensureUserTokens(user.id, email).then(() => loadSessionUsage());
+    })();
   }, [user?.id]);
 
   const loadSessionUsage = async () => {
@@ -188,18 +192,20 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
     const isFirstMessage = currentSession.messages.length === 0;
     if (isFirstMessage) {
-      updateSessionTitle(currentSession.id, messageText, user.id);
+      updateSessionTitle(currentSession.id, messageText, user.id).catch(console.error);
     }
 
-    const updatedSession = {
+    const updatedSession: ChatSession = {
       ...currentSession,
       title: isFirstMessage ? generateTitle(messageText) : currentSession.title,
       messages: newMessages,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
     setCurrentSession(updatedSession);
-    saveSession(updatedSession, user.id);
-    setAllSessions(getAllSessions(user.id));
+    saveSession(updatedSession, user.id)
+      .then(() => getAllSessions(user.id))
+      .then((sessions) => setAllSessions(sessions))
+      .catch(console.error);
 
     const assistantPlaceholderId = crypto.randomUUID();
     setMessages([...newMessages, {
@@ -215,7 +221,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }));
 
     const callbacks: StreamCallbacks = {
-     onChunk: () => {
+      onChunk: () => {
         // 스트리밍 청크는 무시 — onDone에서 최종 message만 표시
       },
       onDone: (message, _options, tokenUsage) => {
@@ -230,16 +236,18 @@ export function Chat({ onNavigateDiary }: ChatProps) {
         setMessages(finalMessages);
         setLoading(false);
 
-        const finalSession = {
+        const finalSession: ChatSession = {
           ...updatedSession,
           messages: finalMessages,
           updatedAt: new Date().toISOString(),
         };
         setCurrentSession(finalSession);
-        saveSession(finalSession, user!.id);
-        setAllSessions(getAllSessions(user!.id));
+        saveSession(finalSession, user!.id)
+          .then(() => getAllSessions(user!.id))
+          .then((sessions) => setAllSessions(sessions))
+          .catch(console.error);
 
-        const draftMessages = finalMessages.map(m => ({ role: m.role, content: m.content }));
+        const draftMessages = finalMessages.map((m) => ({ role: m.role, content: m.content }));
         const turns = countTurns(draftMessages);
         if (turns > 0 && turns % 3 === 0) {
           console.log('[DiaryDebug] saveDiaryDraft userId:', user!.id);
@@ -282,7 +290,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       return;
     }
 
-    const existingEmpty = allSessions.find(s => s.messages.length === 0);
+    const existingEmpty = allSessions.find((s) => s.messages.length === 0);
     if (existingEmpty) {
       setCurrentSession(existingEmpty);
       setMessages([]);
@@ -291,17 +299,21 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       return;
     }
 
-    const newSession = createNewSession();
-    setCurrentSession(newSession);
-    saveSession(newSession, user.id);
-    setMessages([]);
-    setHasStarted(false);
-    setAllSessions(getAllSessions(user.id));
-    setSidebarOpen(false);
+    try {
+      const newSession = await createNewSession(user.id);
+      setCurrentSession(newSession);
+      setMessages([]);
+      setHasStarted(false);
+      const sessions = await getAllSessions(user.id);
+      setAllSessions(sessions);
+      setSidebarOpen(false);
+    } catch (err) {
+      console.error('Error creating new session:', err);
+    }
 
     const draft = loadDiaryDraft(user.id);
     if (draft && countTurns(draft.messages) >= 3) {
-      generateDiaryEntry(draft).then(entry => {
+      generateDiaryEntry(draft).then((entry) => {
         saveDiaryEntry(entry, user.id);
         clearDiaryDraft(user.id);
       }).catch(() => {
@@ -312,47 +324,58 @@ export function Chat({ onNavigateDiary }: ChatProps) {
     }
   };
 
-  const handleSelectSession = (sessionId: string) => {
+  const handleSelectSession = async (sessionId: string) => {
     if (!user) return;
-    const session = getSession(sessionId, user.id);
-    if (session) {
-      setCurrentSession(session);
-      setMessages(session.messages);
-      setHasStarted(session.messages.length > 0);
-      setSidebarOpen(false);
-    }
-  };
-
-  const handleRenameSession = (sessionId: string, newTitle: string) => {
-    if (!user) return;
-    renameSession(sessionId, newTitle, user.id);
-    setAllSessions(getAllSessions(user.id));
-    if (currentSession?.id === sessionId) {
-      setCurrentSession(prev => prev ? { ...prev, title: newTitle } : prev);
-    }
-  };
-
-  const handleDeleteSession = (sessionId: string) => {
-    if (!user) return;
-    deleteSession(sessionId, user.id);
-
-    const updatedSessions = getAllSessions(user.id);
-    setAllSessions(updatedSessions);
-
-    if (currentSession?.id === sessionId) {
-      if (updatedSessions.length > 0) {
-        const nextSession = updatedSessions[0];
-        setCurrentSession(nextSession);
-        setMessages(nextSession.messages);
-        setHasStarted(nextSession.messages.length > 0);
-      } else {
-        const newSession = createNewSession();
-        setCurrentSession(newSession);
-        saveSession(newSession, user.id);
-        setMessages([]);
-        setHasStarted(false);
-        setAllSessions([newSession]);
+    try {
+      const session = await getSession(sessionId, user.id);
+      if (session) {
+        setCurrentSession(session);
+        setMessages(session.messages);
+        setHasStarted(session.messages.length > 0);
+        setSidebarOpen(false);
       }
+    } catch (err) {
+      console.error('Error selecting session:', err);
+    }
+  };
+
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    if (!user) return;
+    try {
+      await renameSession(sessionId, newTitle, user.id);
+      const sessions = await getAllSessions(user.id);
+      setAllSessions(sessions);
+      if (currentSession?.id === sessionId) {
+        setCurrentSession((prev) => prev ? { ...prev, title: newTitle } : prev);
+      }
+    } catch (err) {
+      console.error('Error renaming session:', err);
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!user) return;
+    try {
+      await deleteSession(sessionId, user.id);
+      const updatedSessions = await getAllSessions(user.id);
+      setAllSessions(updatedSessions);
+
+      if (currentSession?.id === sessionId) {
+        if (updatedSessions.length > 0) {
+          const nextSession = updatedSessions[0];
+          setCurrentSession(nextSession);
+          setMessages(nextSession.messages);
+          setHasStarted(nextSession.messages.length > 0);
+        } else {
+          const newSession = await createNewSession(user.id);
+          setCurrentSession(newSession);
+          setMessages([]);
+          setHasStarted(false);
+          setAllSessions([newSession]);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting session:', err);
     }
   };
 
@@ -419,20 +442,20 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
           <div className="flex items-center gap-4">
             {!isPaid && (
-            <div className="text-right">
-              <div className="w-40 h-2 bg-[#F5EFE7] rounded-full overflow-hidden border border-[#E8DED0]">
-                <div
-                  className="h-full transition-all duration-300"
-                  style={{
-                    width: `${tokenPercentage}%`,
-                    backgroundColor: capacityColor,
-                  }}
-                />
+              <div className="text-right">
+                <div className="w-40 h-2 bg-[#F5EFE7] rounded-full overflow-hidden border border-[#E8DED0]">
+                  <div
+                    className="h-full transition-all duration-300"
+                    style={{
+                      width: `${tokenPercentage}%`,
+                      backgroundColor: capacityColor,
+                    }}
+                  />
+                </div>
+                <p className={`text-xs mt-1 ${isLimitReached ? 'text-red-600 font-medium' : 'text-[#9B9B9B]'}`}>
+                  {isLimitReached ? 'Limit reached' : `${Math.round((safeTokensUsed / 1000) * 10) / 10}k / ${safeMaxTokens / 1000}k tokens`}
+                </p>
               </div>
-              <p className={`text-xs mt-1 ${isLimitReached ? 'text-red-600 font-medium' : 'text-[#9B9B9B]'}`}>
-                {isLimitReached ? 'Limit reached' : `${Math.round((safeTokensUsed / 1000) * 10) / 10}k / ${safeMaxTokens / 1000}k tokens`}
-              </p>
-            </div>
             )}
 
             <button

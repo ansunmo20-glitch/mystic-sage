@@ -23,8 +23,6 @@ export interface Announcement {
   created_at: string;
 }
 
-const ANNOUNCEMENTS_KEY = 'mysticSage_announcements';
-
 export async function fetchUsers(): Promise<UserSession[]> {
   const { data, error } = await supabase
     .from('user_sessions')
@@ -87,34 +85,41 @@ export async function saveSetting(key: string, value: string): Promise<void> {
 }
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
-  const raw = localStorage.getItem(ANNOUNCEMENTS_KEY);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw) as Announcement[];
-  } catch {
-    return [];
-  }
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('id, message, active, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
 export async function createAnnouncement(message: string): Promise<void> {
-  const existing = await fetchAnnouncements();
-  const updated = existing.map((a) => ({ ...a, active: false }));
-  const newAnnouncement: Announcement = {
+  await supabase.from('announcements').update({ active: false }).eq('active', true);
+  const { error } = await supabase.from('announcements').insert({
     id: crypto.randomUUID(),
     message,
     active: true,
     created_at: new Date().toISOString(),
-  };
-  localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify([newAnnouncement, ...updated]));
+  });
+  if (error) throw error;
 }
 
 export async function deactivateAnnouncement(id: string): Promise<void> {
-  const existing = await fetchAnnouncements();
-  const updated = existing.map((a) => (a.id === id ? { ...a, active: false } : a));
-  localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updated));
+  const { error } = await supabase
+    .from('announcements')
+    .update({ active: false })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 export async function getActiveAnnouncement(): Promise<Announcement | null> {
-  const announcements = await fetchAnnouncements();
-  return announcements.find((a) => a.active) || null;
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('id, message, active, created_at')
+    .eq('active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  if (error) return null;
+  return data;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
 import InAppBrowserGuard from './components/InAppBrowserGuard';
 import { Welcome } from './components/Welcome';
 import { Chat } from './components/Chat';
@@ -9,7 +9,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { Admin } from './components/Admin';
 import { Diary } from './components/Diary';
 import { BetaConsent } from './components/BetaConsent';
-import { hasSeenWelcome, markWelcomeSeen } from './lib/storage';
+import { hasSeenWelcome, markWelcomeSeen, hasConsented, markConsented } from './lib/storage';
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -20,56 +20,68 @@ if (!clerkPubKey) {
 type Page = 'main' | 'terms' | 'privacy' | 'admin' | 'diary';
 
 function AppContent() {
-  const [showWelcome, setShowWelcome] = useState(true);
+  const { isSignedIn, user } = useUser();
+  const userId = user?.id;
+
+  const [showWelcome, setShowWelcome] = useState(false);
   const [showBetaConsent, setShowBetaConsent] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>('main');
 
   useEffect(() => {
-    if (hasSeenWelcome()) {
-      setShowWelcome(false);
-    }
-    const betaAccepted = localStorage.getItem('beta_consent_accepted') === 'true';
-    if (!betaAccepted) {
-      setShowBetaConsent(true);
-    }
-    setIsReady(true);
-
     const path = window.location.pathname;
-    if (path === '/terms') {
-      setCurrentPage('terms');
-    } else if (path === '/privacy') {
-      setCurrentPage('privacy');
-    } else if (path === '/admin') {
-      setCurrentPage('admin');
-    } else if (path === '/diary') {
-      setCurrentPage('diary');
-    }
+    if (path === '/terms') setCurrentPage('terms');
+    else if (path === '/privacy') setCurrentPage('privacy');
+    else if (path === '/admin') setCurrentPage('admin');
+    else if (path === '/diary') setCurrentPage('diary');
   }, []);
+
+  useEffect(() => {
+    if (isSignedIn === undefined) return;
+
+    if (!isSignedIn || !userId) {
+      setIsReady(true);
+      return;
+    }
+
+    (async () => {
+      try {
+        const [welcomed, consented] = await Promise.all([
+          hasSeenWelcome(userId),
+          hasConsented(userId),
+        ]);
+        setShowWelcome(!welcomed);
+        setShowBetaConsent(!consented);
+      } catch (err) {
+        console.error('Failed to load user settings:', err);
+      } finally {
+        setIsReady(true);
+      }
+    })();
+  }, [isSignedIn, userId]);
 
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
-      if (path === '/terms') {
-        setCurrentPage('terms');
-      } else if (path === '/privacy') {
-        setCurrentPage('privacy');
-      } else if (path === '/admin') {
-        setCurrentPage('admin');
-      } else if (path === '/diary') {
-        setCurrentPage('diary');
-      } else {
-        setCurrentPage('main');
-      }
+      if (path === '/terms') setCurrentPage('terms');
+      else if (path === '/privacy') setCurrentPage('privacy');
+      else if (path === '/admin') setCurrentPage('admin');
+      else if (path === '/diary') setCurrentPage('diary');
+      else setCurrentPage('main');
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const handleBegin = () => {
-    markWelcomeSeen();
+  const handleBegin = async () => {
+    if (userId) await markWelcomeSeen(userId);
     setShowWelcome(false);
+  };
+
+  const handleConsentAccept = async () => {
+    if (userId) await markConsented(userId);
+    setShowBetaConsent(false);
   };
 
   const navigateToTerms = () => {
@@ -123,7 +135,7 @@ function AppContent() {
       </SignedOut>
       <SignedIn>
         {showBetaConsent ? (
-          <BetaConsent onAccept={() => setShowBetaConsent(false)} />
+          <BetaConsent onAccept={handleConsentAccept} />
         ) : showWelcome ? (
           <Welcome onBegin={handleBegin} />
         ) : (

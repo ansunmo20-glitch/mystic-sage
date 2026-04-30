@@ -56,7 +56,6 @@ export function BetaConsent({ onAccept }: BetaConsentProps) {
 
   const handleEnter = () => {
     if (canEnter) {
-      localStorage.setItem('beta_consent_accepted', 'true');
       onAccept();
     }
   };
@@ -124,7 +123,7 @@ export function BetaConsent({ onAccept }: BetaConsentProps) {
         </button>
 
         <p className="text-xs text-[#9B9B9B]">
-          This consent is saved locally and will not be shown again.
+          Your consent will be saved and will not be shown again.
         </p>
       </div>
     </div>
