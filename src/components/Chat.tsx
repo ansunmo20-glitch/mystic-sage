@@ -313,10 +313,11 @@ export function Chat({ onNavigateDiary }: ChatProps) {
 
     const draft = loadDiaryDraft(user.id);
     if (draft && countTurns(draft.messages) >= 3) {
-      generateDiaryEntry(draft).then((entry) => {
-        saveDiaryEntry(entry, user.id);
+      generateDiaryEntry(draft).then(async (entry) => {
+        await saveDiaryEntry(entry, user.id);
         clearDiaryDraft(user.id);
-      }).catch(() => {
+      }).catch((err) => {
+        console.error('[Diary] save pipeline failed:', err);
         clearDiaryDraft(user.id);
       });
     } else if (draft) {

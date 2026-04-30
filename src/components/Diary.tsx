@@ -264,11 +264,17 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [carouselDate, setCarouselDate] = useState<string | null>(null);
+  const [entries, setEntries] = useState<DiaryEntry[]>([]);
 
   useEffect(() => {
-    if (isLoaded && user?.id) {
-      migrateLegacyDiaryEntries(user.id);
-    }
+    if (!isLoaded || !user?.id) return;
+    let cancelled = false;
+    (async () => {
+      await migrateLegacyDiaryEntries(user.id);
+      const loaded = await loadDiaryEntries(user.id);
+      if (!cancelled) setEntries(loaded);
+    })();
+    return () => { cancelled = true; };
   }, [isLoaded, user?.id]);
 
   useEffect(() => {
@@ -277,7 +283,6 @@ export function Diary({ onNavigateHome }: DiaryProps) {
   }, [user?.id]);
 
   const today = todayStr();
-  const entries = isLoaded && user ? loadDiaryEntries(user.id) : [];
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -325,10 +330,10 @@ export function Diary({ onNavigateHome }: DiaryProps) {
     }
   };
 
-  // When back is pressed in DiaryDetail, restore carousel if it was open
   const handleDiaryDetailBack = () => {
     setSelectedEntry(null);
-    // carouselDate stays set → carousel reappears if user came from it
+    // Reload entries to reflect any edits/deletes, then carousel reappears if it was open
+    if (user) loadDiaryEntries(user.id).then(setEntries);
   };
 
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();

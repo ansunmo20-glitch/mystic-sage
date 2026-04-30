@@ -502,8 +502,18 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-    if (!supabaseUrl || !supabaseKey) throw new Error("Supabase credentials not configured");
+    if (!anthropicApiKey) {
+      return new Response(
+        JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response(
+        JSON.stringify({ error: "Supabase credentials not configured" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -517,13 +527,14 @@ Deno.serve(async (req: Request) => {
     }
 
     if (isDiarySummary) {
-      const turnCount = Math.floor(messages.filter(m => m.role === 'user').length);
-      const summaryLengthGuide =
-        turnCount <= 5  ? '2–3 sentences' :
-        turnCount <= 15 ? '1–2 short paragraphs' :
-                          '2–4 paragraphs';
+      try {
+        const turnCount = Math.floor(messages.filter(m => m.role === 'user').length);
+        const summaryLengthGuide =
+          turnCount <= 5  ? '2–3 sentences' :
+          turnCount <= 15 ? '1–2 short paragraphs' :
+                            '2–4 paragraphs';
 
-      const DIARY_SYSTEM_PROMPT = `You are a diary summarizer. Analyze the counseling conversation and return ONLY a raw JSON object with NO markdown formatting, NO backticks, NO explanation. Just the JSON object itself.
+        const DIARY_SYSTEM_PROMPT = `You are a diary summarizer. Analyze the counseling conversation and return ONLY a raw JSON object with NO markdown formatting, NO backticks, NO explanation. Just the JSON object itself.
 
 This conversation has ${turnCount} user turn(s).
 
@@ -540,34 +551,54 @@ CRITICAL RULES:
 - sageMessage MUST reflect something the assistant truly said or asked in this session.
 - summary length MUST scale with the conversation depth as specified above.`;
 
-      const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": anthropicApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2048,
-          system: DIARY_SYSTEM_PROMPT,
-          messages: messages,
-        }),
-      });
+        const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": anthropicApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 2048,
+            system: DIARY_SYSTEM_PROMPT,
+            messages: messages,
+          }),
+        });
 
-      if (!diaryResponse.ok) {
-        const err = await diaryResponse.text();
-        throw new Error(`Diary API error: ${diaryResponse.status} — ${err}`);
+        if (!diaryResponse.ok) {
+          const err = await diaryResponse.text();
+          console.error(`[Diary] Anthropic API error ${diaryResponse.status}:`, err);
+          return new Response(
+            JSON.stringify({ error: `Diary API error: ${diaryResponse.status}`, detail: err }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const diaryData = await diaryResponse.json();
+
+        if (!diaryData.content || !Array.isArray(diaryData.content) || diaryData.content.length === 0) {
+          console.error('[Diary] Unexpected Anthropic response shape:', JSON.stringify(diaryData));
+          return new Response(
+            JSON.stringify({ error: "Diary API returned empty content" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const rawDiaryText = (diaryData.content[0].text as string) ?? '';
+        const cleanDiaryText = rawDiaryText.replace(/```json|```/g, '').trim();
+
+        return new Response(
+          JSON.stringify({ message: cleanDiaryText }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (diaryError) {
+        console.error('[Diary] isDiarySummary handler error:', diaryError);
+        return new Response(
+          JSON.stringify({ error: diaryError instanceof Error ? diaryError.message : "Diary generation failed" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-
-      const diaryData = await diaryResponse.json();
-      const rawDiaryText = diaryData.content[0].text as string;
-      const cleanDiaryText = rawDiaryText.replace(/```json|```/g, '').trim();
-
-      return new Response(
-        JSON.stringify({ message: cleanDiaryText }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     if (!userId) {

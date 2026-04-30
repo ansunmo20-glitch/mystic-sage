@@ -67,7 +67,7 @@ export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false,
 
   const [current, setCurrent] = useState(entry);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const updated: DiaryEntry = {
       ...current,
       summary,
@@ -75,7 +75,7 @@ export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false,
       emotionAfter,
       sageMessage,
     };
-    updateDiaryEntry(updated, userId);
+    await updateDiaryEntry(updated, userId);
     setCurrent(updated);
     setIsEditing(false);
   };
@@ -88,8 +88,8 @@ export function DiaryDetail({ entry, onBack, onNavigateHome, isPaidUser = false,
     setIsEditing(false);
   };
 
-  const handleDelete = () => {
-    deleteDiaryEntry(current.sessionId, userId);
+  const handleDelete = async () => {
+    await deleteDiaryEntry(current.id, userId);
     onBack();
   };
 
