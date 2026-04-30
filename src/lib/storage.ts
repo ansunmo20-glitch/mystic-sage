@@ -43,7 +43,7 @@ async function ensureSettings(userId: string): Promise<UserSettings> {
     };
     const { error: insertError } = await supabase
       .from('user_settings')
-      .insert(newSettings);
+      .upsert(newSettings, { onConflict: 'user_id' });
     if (insertError) throw insertError;
     return newSettings;
   }
