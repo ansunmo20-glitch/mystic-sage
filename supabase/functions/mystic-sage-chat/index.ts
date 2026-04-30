@@ -551,6 +551,10 @@ CRITICAL RULES:
 - sageMessage MUST reflect something the assistant truly said or asked in this session.
 - summary length MUST scale with the conversation depth as specified above.`;
 
+        const transcript = messages
+          .map(m => `${m.role === 'user' ? 'User' : 'Sage'}: ${m.content}`)
+          .join('\n\n');
+
         const diaryResponse = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
@@ -562,7 +566,7 @@ CRITICAL RULES:
             model: "claude-sonnet-4-6",
             max_tokens: 2048,
             system: DIARY_SYSTEM_PROMPT,
-            messages: messages,
+            messages: [{ role: "user", content: transcript }],
           }),
         });
 
