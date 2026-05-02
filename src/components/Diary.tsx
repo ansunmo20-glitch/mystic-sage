@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 import { DiaryDetail } from './DiaryDetail';
@@ -105,16 +105,29 @@ function DayCarousel({
   onClose: () => void;
 }) {
   const [idx, setIdx] = useState(0);
-  const STACK_OFFSET = 44;
-  const CARD_MIN_HEIGHT = 132;
-  const stackHeight = CARD_MIN_HEIGHT + STACK_OFFSET * (entries.length - 1);
+  const touchStartX = useRef<number | null>(null);
+  const didSwipe = useRef(false);
 
   const getPreview = (entry: DiaryEntry): string => {
     const chat = entry.originalChat as { role: string; content: string }[] | null;
     const msg = Array.isArray(chat)
       ? (chat.find(m => m.role === 'user')?.content ?? entry.summary)
       : entry.summary;
-    return msg.length > 20 ? msg.slice(0, 20) + '…' : msg;
+    return msg.length > 140 ? `${msg.slice(0, 140)}...` : msg;
+  };
+
+  const goToPrevious = () => setIdx(i => Math.max(0, i - 1));
+  const goToNext = () => setIdx(i => Math.min(entries.length - 1, i + 1));
+
+  const handleTouchEnd = (clientX: number) => {
+    if (touchStartX.current === null) return;
+    const deltaX = touchStartX.current - clientX;
+    touchStartX.current = null;
+
+    if (Math.abs(deltaX) < 40) return;
+    didSwipe.current = true;
+    if (deltaX > 0) goToNext();
+    else goToPrevious();
   };
 
   return (
@@ -149,29 +162,40 @@ function DayCarousel({
           </span>
         </div>
 
-        {/* Stacked cards: each back card exposes a tappable 44px top band. */}
-        <div className="px-5 pb-2">
-          <div className="relative" style={{ height: stackHeight }}>
+        <div
+          className="overflow-hidden px-5 pb-2"
+          onTouchStart={(event) => {
+            touchStartX.current = event.touches[0]?.clientX ?? null;
+          }}
+          onTouchEnd={(event) => {
+            handleTouchEnd(event.changedTouches[0]?.clientX ?? 0);
+          }}
+        >
+          <div
+            className="flex transition-transform duration-300 ease-out"
+            style={{ transform: `translateX(-${idx * 100}%)` }}
+          >
             {entries.map((entry, i) => {
               const isActive = i === idx;
-              const distance = (i - idx + entries.length) % entries.length;
-              const top = isActive ? STACK_OFFSET * (entries.length - 1) : STACK_OFFSET * (distance - 1);
               return (
                 <button
                   key={entry.sessionId}
                   type="button"
-                  className="absolute left-0 right-0 rounded-2xl p-4 text-left transition-all duration-300"
+                  className="flex min-w-full flex-col rounded-2xl p-5 text-left"
                   style={{
-                    top,
-                    zIndex: isActive ? entries.length + 1 : entries.length - distance,
                     backgroundColor: '#fff',
                     border: isActive ? '1.5px solid #c4a96e' : '1px solid #e2d8c8',
                     boxShadow: isActive ? '0 2px 12px rgba(196,169,110,0.15)' : '0 1px 4px rgba(61,46,30,0.06)',
-                    minHeight: CARD_MIN_HEIGHT,
-                    opacity: isActive ? 1 : 0.88,
+                    minHeight: 172,
                     cursor: 'pointer',
                   }}
-                  onClick={() => (isActive ? onSelect(entry) : setIdx(i))}
+                  onClick={() => {
+                    if (didSwipe.current) {
+                      didSwipe.current = false;
+                      return;
+                    }
+                    onSelect(entry);
+                  }}
                 >
                     <p style={{ fontSize: '0.7rem', color: '#a89070', marginBottom: 8 }}>
                       {formatTime(entry.createdAt)}
@@ -191,37 +215,44 @@ function DayCarousel({
         </div>
 
         {/* Navigation row: prev · dots · next */}
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-center gap-2 px-5 py-3">
+          {entries.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setIdx(i)}
+              className="rounded-full transition-all"
+              aria-label={`Show entry ${i + 1}`}
+              style={{
+                width: i === idx ? 8 : 6,
+                height: i === idx ? 8 : 6,
+                backgroundColor: i === idx ? '#c4a96e' : '#d4c4a0',
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between px-4 pb-3">
           <button
-            onClick={() => setIdx(i => Math.max(0, i - 1))}
+            onClick={goToPrevious}
             disabled={idx === 0}
             className="p-1.5 rounded-full transition-opacity"
             style={{ opacity: idx === 0 ? 0.3 : 1, color: '#c4a96e' }}
+            aria-label="Previous entry"
           >
             <ChevronLeft className="w-5 h-5" strokeWidth={2} />
           </button>
 
-          <div className="flex gap-1.5 items-center">
-            {entries.map((_, i) => (
-              <span
-                key={i}
-                onClick={() => setIdx(i)}
-                className="block rounded-full cursor-pointer"
-                style={{
-                  width: i === idx ? 16 : 5,
-                  height: 5,
-                  backgroundColor: i === idx ? '#c4a96e' : '#d4c4a0',
-                  transition: 'width 0.3s ease-out, background-color 0.3s',
-                }}
-              />
-            ))}
-          </div>
+          <span style={{ color: '#a89070', fontSize: '0.75rem' }}>
+            {idx + 1} / {entries.length}
+          </span>
 
           <button
-            onClick={() => setIdx(i => Math.min(entries.length - 1, i + 1))}
+            onClick={goToNext}
             disabled={idx === entries.length - 1}
             className="p-1.5 rounded-full transition-opacity"
             style={{ opacity: idx === entries.length - 1 ? 0.3 : 1, color: '#c4a96e' }}
+            aria-label="Next entry"
           >
             <ChevronRight className="w-5 h-5" strokeWidth={2} />
           </button>
