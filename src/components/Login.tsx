@@ -126,7 +126,7 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
     try {
       await signIn.authenticateWithRedirect({
         strategy: 'oauth_google',
-        redirectUrl: '/',
+        redirectUrl: '/sso-callback',
         redirectUrlComplete: '/',
       });
     } catch (error) {

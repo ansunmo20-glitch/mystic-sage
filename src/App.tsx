@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ClerkProvider, SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
+import { AuthenticateWithRedirectCallback, ClerkProvider, SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
 import InAppBrowserGuard from './components/InAppBrowserGuard';
 import { Welcome } from './components/Welcome';
 import { Chat } from './components/Chat';
@@ -17,7 +17,16 @@ if (!clerkPubKey) {
   throw new Error('Missing Clerk Publishable Key');
 }
 
-type Page = 'main' | 'terms' | 'privacy' | 'admin' | 'diary';
+type Page = 'main' | 'terms' | 'privacy' | 'admin' | 'diary' | 'sso-callback';
+
+function getPageFromPath(path: string): Page {
+  if (path === '/terms') return 'terms';
+  if (path === '/privacy') return 'privacy';
+  if (path === '/admin') return 'admin';
+  if (path === '/diary') return 'diary';
+  if (path === '/sso-callback') return 'sso-callback';
+  return 'main';
+}
 
 function AppContent() {
   const { isSignedIn, user } = useUser();
@@ -29,11 +38,7 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<Page>('main');
 
   useEffect(() => {
-    const path = window.location.pathname;
-    if (path === '/terms') setCurrentPage('terms');
-    else if (path === '/privacy') setCurrentPage('privacy');
-    else if (path === '/admin') setCurrentPage('admin');
-    else if (path === '/diary') setCurrentPage('diary');
+    setCurrentPage(getPageFromPath(window.location.pathname));
   }, []);
 
   useEffect(() => {
@@ -62,12 +67,7 @@ function AppContent() {
 
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      if (path === '/terms') setCurrentPage('terms');
-      else if (path === '/privacy') setCurrentPage('privacy');
-      else if (path === '/admin') setCurrentPage('admin');
-      else if (path === '/diary') setCurrentPage('diary');
-      else setCurrentPage('main');
+      setCurrentPage(getPageFromPath(window.location.pathname));
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -106,6 +106,17 @@ function AppContent() {
 
   if (!isReady) {
     return null;
+  }
+
+  if (currentPage === 'sso-callback') {
+    return (
+      <AuthenticateWithRedirectCallback
+        signInForceRedirectUrl="/"
+        signUpForceRedirectUrl="/"
+        signInFallbackRedirectUrl="/"
+        signUpFallbackRedirectUrl="/"
+      />
+    );
   }
 
   if (currentPage === 'admin') {
