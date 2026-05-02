@@ -507,7 +507,7 @@ export function Chat({ onNavigateDiary }: ChatProps) {
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C4A96E] text-[11px] font-medium text-white">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#c4a96e] text-[11px] font-medium text-[#2c2a26]">
                     {userInitials}
                   </span>
                 )}
