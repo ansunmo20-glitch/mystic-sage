@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { useSignIn } from '@clerk/clerk-react';
 import { Circle, Leaf, Sparkles } from 'lucide-react';
 
@@ -119,6 +120,7 @@ type LoginProps = {
 
 export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps) {
   const { isLoaded, signIn } = useSignIn();
+  const [showLogin, setShowLogin] = useState(false);
 
   const handleGoogleSignIn = async () => {
     if (!isLoaded || !signIn) return;
@@ -134,6 +136,42 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
     }
   };
 
+  if (showLogin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#faf6ef] px-5 py-16 font-sans text-[#2c2a26] sm:px-8">
+        <div className="w-full max-w-md text-center">
+          <button
+            type="button"
+            onClick={() => setShowLogin(false)}
+            className="mb-10 text-sm font-light text-[#8a8680] underline decoration-[#c4a96e] underline-offset-4 hover:text-[#2c2a26]"
+          >
+            Back to Mystic Sage
+          </button>
+
+          <div className="mb-8">
+            <div className="mb-4 font-serif text-5xl font-light text-[#2c2a26]">Mystic Sage</div>
+            <p className="text-base font-light leading-7 text-[#8a8680]">
+              Sign in to begin your first session.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={!isLoaded}
+            className="flex min-h-12 w-full items-center justify-center border border-[#c4a96e] bg-[#c4a96e] px-6 py-3 text-base font-normal text-[#2c2a26] transition-colors hover:bg-[#b89b5e] focus:outline-none focus:ring-2 focus:ring-[#c4a96e] focus:ring-offset-2 focus:ring-offset-[#faf6ef] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Sign in with Google
+          </button>
+
+          <p className="mt-5 text-sm font-light leading-6 text-[#8a8680]">
+            No credit card. Free during beta.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#faf6ef] font-sans text-[#2c2a26]">
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-[rgba(196,169,110,0.2)] bg-[rgba(250,246,239,0.92)] backdrop-blur">
@@ -143,8 +181,7 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
           </a>
           <button
             type="button"
-            onClick={handleGoogleSignIn}
-            disabled={!isLoaded}
+            onClick={() => setShowLogin(true)}
             className="text-sm font-normal text-[#2c2a26] underline decoration-[#c4a96e] decoration-1 underline-offset-4"
           >
             Try Free &rarr;
@@ -166,7 +203,7 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
                 Ancient Eastern wisdom, reframed for the way you live now.
               </p>
               <div className="mt-10">
-                <CtaLink onClick={handleGoogleSignIn} disabled={!isLoaded}>
+                <CtaLink onClick={() => setShowLogin(true)}>
                   Try Mystic Sage Free &rarr;
                 </CtaLink>
               </div>
@@ -294,7 +331,7 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
             </h2>
             <p className="mt-5 text-xl font-light text-[#8a8680]">No credit card. No commitment.</p>
             <div className="mt-9">
-              <CtaLink filled onClick={handleGoogleSignIn} disabled={!isLoaded}>
+              <CtaLink filled onClick={() => setShowLogin(true)}>
                 Start Your First Session &rarr;
               </CtaLink>
             </div>
