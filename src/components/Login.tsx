@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
+import { useSignIn } from '@clerk/clerk-react';
 import { Circle, Leaf, Sparkles } from 'lucide-react';
-
-const appUrl = 'https://mystic-sage-tau.vercel.app';
 
 const values = [
   {
@@ -60,21 +59,27 @@ const steps = [
 function CtaLink({
   children,
   filled = false,
+  onClick,
+  disabled = false,
 }: {
   children: ReactNode;
   filled?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <a
-      href={appUrl}
-      className={`inline-flex min-h-12 items-center justify-center border px-6 py-3 text-base font-normal transition-colors focus:outline-none focus:ring-2 focus:ring-[#c4a96e] focus:ring-offset-2 focus:ring-offset-[#faf6ef] ${
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex min-h-12 items-center justify-center border px-6 py-3 text-base font-normal transition-colors focus:outline-none focus:ring-2 focus:ring-[#c4a96e] focus:ring-offset-2 focus:ring-offset-[#faf6ef] disabled:cursor-not-allowed disabled:opacity-60 ${
         filled
           ? 'border-[#c4a96e] bg-[#c4a96e] text-[#2c2a26] hover:bg-[#b89b5e]'
           : 'border-[#c4a96e] bg-transparent text-[#2c2a26] hover:bg-[#c4a96e]/10'
       }`}
     >
       {children}
-    </a>
+    </button>
   );
 }
 
@@ -113,6 +118,22 @@ type LoginProps = {
 };
 
 export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps) {
+  const { isLoaded, signIn } = useSignIn();
+
+  const handleGoogleSignIn = async () => {
+    if (!isLoaded || !signIn) return;
+
+    try {
+      await signIn.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: '/',
+        redirectUrlComplete: '/',
+      });
+    } catch (error) {
+      console.error('Failed to start Google sign-in:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#faf6ef] font-sans text-[#2c2a26]">
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-[rgba(196,169,110,0.2)] bg-[rgba(250,246,239,0.92)] backdrop-blur">
@@ -120,12 +141,14 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
           <a href="#hero" className="font-serif text-2xl font-normal text-[#2c2a26]">
             Mystic Sage
           </a>
-          <a
-            href={appUrl}
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={!isLoaded}
             className="text-sm font-normal text-[#2c2a26] underline decoration-[#c4a96e] decoration-1 underline-offset-4"
           >
             Try Free &rarr;
-          </a>
+          </button>
         </div>
       </nav>
 
@@ -143,7 +166,9 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
                 Ancient Eastern wisdom, reframed for the way you live now.
               </p>
               <div className="mt-10">
-                <CtaLink>Try Mystic Sage Free &rarr;</CtaLink>
+                <CtaLink onClick={handleGoogleSignIn} disabled={!isLoaded}>
+                  Try Mystic Sage Free &rarr;
+                </CtaLink>
               </div>
             </div>
           </div>
@@ -269,7 +294,9 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
             </h2>
             <p className="mt-5 text-xl font-light text-[#8a8680]">No credit card. No commitment.</p>
             <div className="mt-9">
-              <CtaLink filled>Start Your First Session &rarr;</CtaLink>
+              <CtaLink filled onClick={handleGoogleSignIn} disabled={!isLoaded}>
+                Start Your First Session &rarr;
+              </CtaLink>
             </div>
             <p className="mx-auto mt-6 max-w-xl text-sm font-light leading-6 text-[#8a8680]">
               Currently in open beta - your feedback shapes what Mystic Sage becomes.
