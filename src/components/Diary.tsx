@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Flower2, Home, BookOpen, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 import { DiaryDetail } from './DiaryDetail';
@@ -105,20 +105,9 @@ function DayCarousel({
   onClose: () => void;
 }) {
   const [idx, setIdx] = useState(0);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [cW, setCW] = useState(300);
-
-  useLayoutEffect(() => {
-    if (trackRef.current) setCW(trackRef.current.offsetWidth);
-  }, []);
-
-  const PEEK = 32;
-  const GAP = 12;
-  // cardWidth such that: left_peek + cardWidth + gap + right_peek = cW, with left_peek = right_peek = PEEK
-  const cardW = Math.max(0, cW - 2 * PEEK - GAP);
-  // step is how far we shift per card index
-  const step = Math.max(0, cW - 2 * PEEK);
-  const tx = PEEK - idx * step;
+  const STACK_OFFSET = 44;
+  const CARD_MIN_HEIGHT = 132;
+  const stackHeight = CARD_MIN_HEIGHT + STACK_OFFSET * (entries.length - 1);
 
   const getPreview = (entry: DiaryEntry): string => {
     const chat = entry.originalChat as { role: string; content: string }[] | null;
@@ -160,41 +149,30 @@ function DayCarousel({
           </span>
         </div>
 
-        {/* Carousel track */}
-        <div ref={trackRef} className="overflow-hidden" style={{ paddingBottom: 2 }}>
-          <div
-            className="flex"
-            style={{
-              gap: GAP,
-              transform: `translateX(${tx}px)`,
-              transition: 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-              willChange: 'transform',
-            }}
-          >
+        {/* Stacked cards: each back card exposes a tappable 44px top band. */}
+        <div className="px-5 pb-2">
+          <div className="relative" style={{ height: stackHeight }}>
             {entries.map((entry, i) => {
               const isActive = i === idx;
+              const distance = (i - idx + entries.length) % entries.length;
+              const top = isActive ? STACK_OFFSET * (entries.length - 1) : STACK_OFFSET * (distance - 1);
               return (
-                <div
+                <button
                   key={entry.sessionId}
+                  type="button"
+                  className="absolute left-0 right-0 rounded-2xl p-4 text-left transition-all duration-300"
                   style={{
-                    width: cardW,
-                    flexShrink: 0,
-                    transform: isActive ? 'scale(1)' : 'scale(0.9)',
-                    opacity: isActive ? 1 : 0.6,
-                    transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
+                    top,
+                    zIndex: isActive ? entries.length + 1 : entries.length - distance,
+                    backgroundColor: '#fff',
+                    border: isActive ? '1.5px solid #c4a96e' : '1px solid #e2d8c8',
+                    boxShadow: isActive ? '0 2px 12px rgba(196,169,110,0.15)' : '0 1px 4px rgba(61,46,30,0.06)',
+                    minHeight: CARD_MIN_HEIGHT,
+                    opacity: isActive ? 1 : 0.88,
                     cursor: 'pointer',
                   }}
                   onClick={() => (isActive ? onSelect(entry) : setIdx(i))}
                 >
-                  <div
-                    className="rounded-2xl p-4"
-                    style={{
-                      backgroundColor: '#fff',
-                      border: isActive ? '1.5px solid #c4a96e' : '1px solid #e2d8c8',
-                      boxShadow: isActive ? '0 2px 12px rgba(196,169,110,0.15)' : '0 1px 4px rgba(61,46,30,0.06)',
-                      minHeight: 100,
-                    }}
-                  >
                     <p style={{ fontSize: '0.7rem', color: '#a89070', marginBottom: 8 }}>
                       {formatTime(entry.createdAt)}
                     </p>
@@ -206,8 +184,7 @@ function DayCarousel({
                         tap to open →
                       </p>
                     )}
-                  </div>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -61,8 +61,10 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCrisisBanner, setShowCrisisBanner] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<'free' | 'paid'>('free');
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user?.id) {
@@ -127,6 +129,17 @@ export function Chat({ onNavigateDiary }: ChatProps) {
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
   }, [input]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
 
   const handleSend = async () => {
     const messageText = input.trim();
@@ -407,6 +420,17 @@ export function Chat({ onNavigateDiary }: ChatProps) {
   const tokenPercentage = isLimitReached ? 100 : safeMaxTokens > 0 ? Math.max(0, Math.min(100, (safeTokensUsed / safeMaxTokens) * 100)) : 0;
   const capacityColor = isLimitReached ? '#DC2626' : tokenPercentage < 70 ? '#C4A96E' : tokenPercentage < 90 ? '#D4A574' : '#C97C5D';
   const showLimitScreen = !isPaid && !canUseSession && hasStarted;
+  const userEmail = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+  const userInitials = (
+    user?.fullName?.trim()
+      ? user.fullName
+      : userEmail
+  )
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'MS';
 
   return (
     <div className="min-h-screen bg-[#FAF6EF] flex flex-col">
@@ -467,14 +491,43 @@ export function Chat({ onNavigateDiary }: ChatProps) {
               <SettingsIcon className="w-5 h-5 text-[#6B6B6B]" />
             </button>
 
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-1.5 text-sm text-[#9B9B9B] hover:text-[#C4A96E] transition-colors"
-              title="Sign out"
-            >
-              <span>Sign out</span>
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div ref={accountMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setAccountMenuOpen((open) => !open)}
+                className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[#F5EFE7]"
+                aria-label="Account menu"
+                aria-expanded={accountMenuOpen}
+              >
+                {user?.imageUrl ? (
+                  <img
+                    src={user.imageUrl}
+                    alt=""
+                    className="h-7 w-7 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C4A96E] text-[11px] font-medium text-white">
+                    {userInitials}
+                  </span>
+                )}
+              </button>
+
+              {accountMenuOpen && (
+                <div className="absolute right-0 top-11 z-50 w-64 rounded-xl border border-[#E8DED0] bg-white p-3 text-left shadow-warm-lg">
+                  <p className="truncate px-2 pb-3 text-sm text-[#6B6B6B]">
+                    {userEmail || 'Signed in'}
+                  </p>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-sm text-[#6B6B6B] transition-colors hover:bg-[#F5EFE7] hover:text-[#C4A96E]"
+                  >
+                    <span>Sign out</span>
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
