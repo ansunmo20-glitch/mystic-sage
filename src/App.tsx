@@ -131,7 +131,7 @@ function AppContent() {
   return (
     <>
       <SignedOut>
-        <Login />
+        <Login onNavigateTerms={navigateToTerms} onNavigatePrivacy={navigateToPrivacy} />
       </SignedOut>
       <SignedIn>
         {showBetaConsent ? (
