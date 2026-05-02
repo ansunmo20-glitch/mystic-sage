@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Circle, Leaf, MessageCircle, Sparkles } from 'lucide-react';
+import { Circle, Leaf, Sparkles } from 'lucide-react';
 
 const appUrl = 'https://mystic-sage-tau.vercel.app';
 
@@ -90,6 +90,23 @@ function ResultMark({ value }: { value: string }) {
   return <span>{value}</span>;
 }
 
+function ComparisonValue({ label, value, highlighted = false }: { label: string; value: string; highlighted?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-4 px-4 py-3 text-base ${
+        highlighted
+          ? 'border border-[#c4a96e] bg-[#c4a96e]/15 text-[#2c2a26]'
+          : 'border border-[rgba(196,169,110,0.2)] text-[#8a8680]'
+      }`}
+    >
+      <span className="font-light">{label}</span>
+      <span className={highlighted ? 'font-normal text-[#2c2a26]' : 'font-light text-[#2c2a26]'}>
+        <ResultMark value={value} />
+      </span>
+    </div>
+  );
+}
+
 type LoginProps = {
   onNavigateTerms?: () => void;
   onNavigatePrivacy?: () => void;
@@ -119,10 +136,6 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
         >
           <div className="mx-auto w-full max-w-6xl py-20">
             <div className="max-w-3xl">
-              <p className="mb-6 flex items-center gap-3 text-sm uppercase tracking-[0.24em] text-[#8a8680]">
-                <MessageCircle className="h-4 w-4 text-[#c4a96e]" aria-hidden="true" />
-                Eastern philosophy AI counseling
-              </p>
               <h1 className="font-serif text-[52px] font-light leading-[0.95] text-[#2c2a26] sm:text-7xl lg:text-8xl">
                 Just talk. I&apos;m listening.
               </h1>
@@ -180,7 +193,21 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
             <h2 className="text-center font-serif text-4xl font-light text-[#2c2a26] sm:text-5xl">
               What makes Mystic Sage different
             </h2>
-            <div className="mt-12 overflow-x-auto border border-[rgba(196,169,110,0.2)]">
+
+            <div className="mt-10 space-y-5 sm:hidden">
+              {comparisonRows.map(([feature, chatGpt, wellnessApps, mysticSage]) => (
+                <article key={feature} className="border-t border-[rgba(196,169,110,0.2)] pt-5">
+                  <h3 className="mb-4 font-serif text-2xl font-normal leading-8 text-[#2c2a26]">{feature}</h3>
+                  <div className="space-y-2">
+                    <ComparisonValue label="ChatGPT" value={chatGpt} />
+                    <ComparisonValue label="Wellness Apps" value={wellnessApps} />
+                    <ComparisonValue label="Mystic Sage" value={mysticSage} highlighted />
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="relative mt-12 hidden overflow-x-auto border border-[rgba(196,169,110,0.2)] sm:block">
               <table className="w-full min-w-[680px] border-collapse text-left text-base">
                 <thead>
                   <tr className="border-b border-[rgba(196,169,110,0.2)]">
