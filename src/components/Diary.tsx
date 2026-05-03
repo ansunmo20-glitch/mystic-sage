@@ -118,6 +118,9 @@ function DayCarousel({
 
   const goToPrevious = () => setIdx(i => Math.max(0, i - 1));
   const goToNext = () => setIdx(i => Math.min(entries.length - 1, i + 1));
+  const cardWidth = 86;
+  const activeInset = (100 - cardWidth) / 2;
+  const slideStep = 72;
 
   const handleTouchEnd = (clientX: number) => {
     if (touchStartX.current === null) return;
@@ -163,7 +166,7 @@ function DayCarousel({
         </div>
 
         <div
-          className="overflow-hidden px-5 pb-2"
+          className="overflow-hidden pb-2"
           onTouchStart={(event) => {
             touchStartX.current = event.touches[0]?.clientX ?? null;
           }}
@@ -173,7 +176,7 @@ function DayCarousel({
         >
           <div
             className="flex transition-transform duration-300 ease-out"
-            style={{ transform: `translateX(-${idx * 100}%)` }}
+            style={{ transform: `translateX(calc(${activeInset}% - ${idx * slideStep}%))` }}
           >
             {entries.map((entry, i) => {
               const isActive = i === idx;
@@ -181,17 +184,27 @@ function DayCarousel({
                 <button
                   key={entry.sessionId}
                   type="button"
-                  className="flex min-w-full flex-col rounded-2xl p-5 text-left"
+                  className="relative flex shrink-0 flex-col rounded-2xl p-5 text-left transition-all duration-300 ease-out"
                   style={{
+                    width: `${cardWidth}%`,
+                    marginRight: `-${cardWidth - slideStep}%`,
                     backgroundColor: '#fff',
                     border: isActive ? '1.5px solid #c4a96e' : '1px solid #e2d8c8',
-                    boxShadow: isActive ? '0 2px 12px rgba(196,169,110,0.15)' : '0 1px 4px rgba(61,46,30,0.06)',
-                    minHeight: 172,
+                    boxShadow: isActive ? '0 5px 18px rgba(61,46,30,0.12)' : '0 1px 6px rgba(61,46,30,0.07)',
+                    minHeight: 156,
                     cursor: 'pointer',
+                    opacity: isActive ? 1 : 0.7,
+                    transform: isActive ? 'scale(0.9)' : 'scale(0.88)',
+                    transformOrigin: 'center',
+                    zIndex: isActive ? 2 : 1,
                   }}
                   onClick={() => {
                     if (didSwipe.current) {
                       didSwipe.current = false;
+                      return;
+                    }
+                    if (!isActive) {
+                      setIdx(i);
                       return;
                     }
                     onSelect(entry);

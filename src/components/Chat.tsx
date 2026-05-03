@@ -495,22 +495,11 @@ export function Chat({ onNavigateDiary }: ChatProps) {
               <button
                 type="button"
                 onClick={() => setAccountMenuOpen((open) => !open)}
-                className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[#F5EFE7]"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#c4a96e] text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#b89b5d]"
                 aria-label="Account menu"
                 aria-expanded={accountMenuOpen}
               >
-                {user?.imageUrl ? (
-                  <img
-                    src={user.imageUrl}
-                    alt=""
-                    className="h-7 w-7 rounded-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#c4a96e] text-[11px] font-medium text-[#2c2a26]">
-                    {userInitials}
-                  </span>
-                )}
+                {userInitials}
               </button>
 
               {accountMenuOpen && (
