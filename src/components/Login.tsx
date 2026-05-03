@@ -57,6 +57,26 @@ const steps = [
   'Receive a response that goes deeper, not just wider',
 ];
 
+function MysticSageLogo() {
+  return (
+    <svg
+      className="mx-auto mb-5 h-20 w-20"
+      viewBox="0 0 80 80"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M47.76 68.98A30 30 0 1 1 68.98 47.76"
+        stroke="#c4a96e"
+        strokeWidth="10"
+        strokeLinecap="round"
+      />
+      <circle cx="40" cy="40" r="11" fill="#c4a96e" />
+    </svg>
+  );
+}
+
 function CtaLink({
   children,
   filled = false,
@@ -140,15 +160,8 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#faf6ef] px-5 py-16 font-sans text-[#2c2a26] sm:px-8">
         <div className="w-full max-w-md text-center">
-          <button
-            type="button"
-            onClick={() => setShowLogin(false)}
-            className="mb-10 text-sm font-light text-[#8a8680] underline decoration-[#c4a96e] underline-offset-4 hover:text-[#2c2a26]"
-          >
-            Back to Mystic Sage
-          </button>
-
           <div className="mb-8">
+            <MysticSageLogo />
             <div className="mb-4 font-serif text-5xl font-light text-[#2c2a26]">Mystic Sage</div>
             <p className="text-base font-light leading-7 text-[#8a8680]">
               Sign in to begin your first session.
@@ -167,6 +180,14 @@ export default function Login({ onNavigateTerms, onNavigatePrivacy }: LoginProps
           <p className="mt-5 text-sm font-light leading-6 text-[#8a8680]">
             No credit card. Free during beta.
           </p>
+
+          <button
+            type="button"
+            onClick={() => setShowLogin(false)}
+            className="mt-6 text-sm font-light text-[#8a8680] underline decoration-[#c4a96e] underline-offset-4 hover:text-[#2c2a26]"
+          >
+            Back to Mystic Sage
+          </button>
         </div>
       </div>
     );
